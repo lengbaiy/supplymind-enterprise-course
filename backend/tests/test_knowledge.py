@@ -114,3 +114,36 @@ def test_search_returns_citations_and_rejects_unknown_tenant_resource(monkeypatc
             json={"query": "production", "limit": 3},
         )
         assert denied.status_code == 404
+
+
+def test_knowledge_lifecycle_archive_and_retry(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("SUPPLYMIND_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path / 'lifecycle.db'}")
+    monkeypatch.setenv("SUPPLYMIND_JWT_SECRET", "test-secret-that-is-long-enough-for-tests")
+    monkeypatch.setenv("SUPPLYMIND_INGESTION_MODE", "eager")
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
+    from app.main import app
+
+    with TestClient(app) as client:
+        login = client.post("/api/v1/auth/login", json={
+            "email": "admin@demo.local", "password": "ChangeMe123!", "organization_slug": "demo-factory"
+        })
+        headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+        base = client.post("/api/v1/knowledge-bases", headers=headers, json={"name": "生命周期库"}).json()
+        upload = client.post(
+            f"/api/v1/knowledge-bases/{base['id']}/documents", headers=headers,
+            files={"file": ("lifecycle.md", b"metric definition", "text/markdown")},
+        )
+        assert upload.status_code == 201
+        document_id = upload.json()["id"]
+        task_id = upload.json()["ingestion_task_id"]
+        archived_document = client.post(f"/api/v1/documents/{document_id}/archive", headers=headers)
+        assert archived_document.status_code == 200
+        assert archived_document.json()["is_archived"] is True
+        retry = client.post(f"/api/v1/ingestion-tasks/{task_id}/retry", headers=headers)
+        assert retry.status_code == 409
+        archived_base = client.post(f"/api/v1/knowledge-bases/{base['id']}/archive", headers=headers)
+        assert archived_base.status_code == 200
+        assert archived_base.json()["is_archived"] is True
+        assert client.delete(f"/api/v1/knowledge-bases/{base['id']}", headers=headers).status_code == 204

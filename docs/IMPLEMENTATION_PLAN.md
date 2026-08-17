@@ -49,6 +49,14 @@ This file is the execution source of truth for the enterprise course case. Each 
 - [ ] 成员邀请和完整成员 CRUD 延续到身份与租户切块，避免重复实现认证关联。
   - Verify: migration `0004_organization_quotas`, backend `21 passed`, Ruff, frontend build, API live/ready.
 
+### P02 - 知识库完整生命周期
+
+- [x] 知识库归档/恢复、详情读取、删除保护和管理审计。
+- [x] 文档文件大小、版本、语言、归档状态和失败信息字段。
+- [x] 摄取任务最大重试、下次重试、耗时和死信字段；管理员可发起幂等重试。
+- [x] 前端知识库详情、检索预览、引用展示、任务失败重试和归档操作。
+  - Verify: migration `0005_knowledge_lifecycle`, backend `22 passed`, Ruff, frontend build and Docker health.
+
 - [x] S11 repository classification: backend/frontend/database/infra/docs ownership, database asset index, compatibility boundary, and runtime-file ignore rules.
   - Verify: path checks, Compose validation, backend/frontend builds, and no local database artifacts tracked.
 - [x] S12 audit domain extraction: repository, service, DTO, and router with `/api/v1/audit` compatibility.

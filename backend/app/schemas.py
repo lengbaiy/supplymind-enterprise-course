@@ -113,11 +113,18 @@ class KnowledgeBaseCreate(BaseModel):
     description: str = Field(default="", max_length=2000)
 
 
+class KnowledgeBaseUpdate(BaseModel):
+    name: str = Field(min_length=2, max_length=160)
+    description: str = Field(default="", max_length=2000)
+
+
 class KnowledgeBaseView(BaseModel):
     id: str
     name: str
     description: str
     created_by: str
+    is_archived: bool = False
+    archived_at: datetime | None = None
     created_at: datetime
 
 
@@ -127,6 +134,11 @@ class DocumentView(BaseModel):
     filename: str
     content_type: str
     status: str
+    file_size_bytes: int = 0
+    version: int = 1
+    language: str = "unknown"
+    is_archived: bool = False
+    error_message: str | None = None
     chunk_count: int
     ingestion_task_id: str | None = None
     created_at: datetime
@@ -137,6 +149,10 @@ class IngestionTaskView(BaseModel):
     document_id: str
     status: str
     attempts: int
+    max_attempts: int = 3
+    next_retry_at: datetime | None = None
+    dead_letter: bool = False
+    elapsed_ms: int | None = None
     celery_task_id: str | None
     error_message: str | None
     created_at: datetime

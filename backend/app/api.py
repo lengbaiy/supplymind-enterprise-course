@@ -58,6 +58,7 @@ from app.schemas import (
     DocumentView,
     IngestionTaskView,
     KnowledgeBaseCreate,
+    KnowledgeBaseUpdate,
     KnowledgeBaseView,
     KnowledgeSearchRequest,
     LoginRequest,
@@ -393,6 +394,13 @@ async def list_knowledge_bases(
     return list(result)
 
 
+@router.get("/knowledge-bases/{knowledge_base_id}", response_model=KnowledgeBaseView)
+async def get_knowledge_base(
+    knowledge_base_id: str, principal: Principal = Depends(get_principal), session: AsyncSession = Depends(get_session)
+) -> KnowledgeBase:
+    return await get_tenant_knowledge_base(session, knowledge_base_id, principal.tenant_id)
+
+
 @router.post("/knowledge-bases", response_model=KnowledgeBaseView, status_code=status.HTTP_201_CREATED)
 async def create_knowledge_base(
     payload: KnowledgeBaseCreate,
@@ -411,6 +419,49 @@ async def create_knowledge_base(
     await session.commit()
     await session.refresh(knowledge_base)
     return knowledge_base
+
+
+@router.patch("/knowledge-bases/{knowledge_base_id}", response_model=KnowledgeBaseView)
+async def update_knowledge_base(
+    knowledge_base_id: str, payload: KnowledgeBaseUpdate,
+    principal: Principal = Depends(require_role("org_admin", "platform_admin")),
+    session: AsyncSession = Depends(get_session),
+) -> KnowledgeBase:
+    knowledge_base = await get_tenant_knowledge_base(session, knowledge_base_id, principal.tenant_id)
+    knowledge_base.name = payload.name
+    knowledge_base.description = payload.description
+    await audit(session, principal.tenant_id, principal.user_id, "knowledge_base.updated", "knowledge_base", knowledge_base.id)
+    await session.commit()
+    return knowledge_base
+
+
+@router.post("/knowledge-bases/{knowledge_base_id}/archive", response_model=KnowledgeBaseView)
+async def archive_knowledge_base(
+    knowledge_base_id: str, principal: Principal = Depends(require_role("org_admin", "platform_admin")),
+    session: AsyncSession = Depends(get_session),
+) -> KnowledgeBase:
+    knowledge_base = await get_tenant_knowledge_base(session, knowledge_base_id, principal.tenant_id)
+    knowledge_base.is_archived = not knowledge_base.is_archived
+    knowledge_base.archived_at = datetime.now(UTC) if knowledge_base.is_archived else None
+    await audit(session, principal.tenant_id, principal.user_id, "knowledge_base.archived" if knowledge_base.is_archived else "knowledge_base.restored", "knowledge_base", knowledge_base.id)
+    await session.commit()
+    return knowledge_base
+
+
+@router.delete("/knowledge-bases/{knowledge_base_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_knowledge_base(
+    knowledge_base_id: str, principal: Principal = Depends(require_role("org_admin", "platform_admin")),
+    session: AsyncSession = Depends(get_session),
+) -> Response:
+    knowledge_base = await get_tenant_knowledge_base(session, knowledge_base_id, principal.tenant_id)
+    document_count = await session.scalar(select(func.count(Document.id)).where(Document.knowledge_base_id == knowledge_base.id, Document.is_archived.is_(False))) or 0
+    if document_count:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Archive the knowledge base before deleting it")
+    knowledge_base.is_archived = True
+    knowledge_base.archived_at = datetime.now(UTC)
+    await audit(session, principal.tenant_id, principal.user_id, "knowledge_base.deleted", "knowledge_base", knowledge_base.id)
+    await session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("/knowledge-bases/{knowledge_base_id}/documents", response_model=DocumentView, status_code=status.HTTP_201_CREATED)
@@ -447,6 +498,8 @@ async def upload_document(
         content_type=file.content_type or "application/octet-stream",
         content_sha256=digest,
         created_by=principal.user_id,
+        file_size_bytes=len(payload),
+        language="zh" if any("\u4e00" <= char <= "\u9fff" for char in payload.decode("utf-8", errors="ignore")) else "en",
         status="queued",
         source_path=str(source_path),
     )
@@ -468,6 +521,61 @@ async def upload_document(
     await session.refresh(document)
     chunk_count = await session.scalar(select(func.count(Chunk.id)).where(Chunk.document_id == document.id)) or 0
     return DocumentView.model_validate({**document.__dict__, "chunk_count": chunk_count, "ingestion_task_id": task.id})
+
+
+@router.get("/documents/{document_id}", response_model=DocumentView)
+async def get_document(
+    document_id: str, principal: Principal = Depends(get_principal), session: AsyncSession = Depends(get_session)
+) -> DocumentView:
+    document = await session.scalar(select(Document).where(Document.id == document_id, Document.tenant_id == principal.tenant_id))
+    if not document:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+    chunk_count = await session.scalar(select(func.count(Chunk.id)).where(Chunk.document_id == document.id)) or 0
+    return DocumentView.model_validate({**document.__dict__, "chunk_count": chunk_count})
+
+
+@router.post("/documents/{document_id}/archive", response_model=DocumentView)
+async def archive_document(
+    document_id: str, principal: Principal = Depends(require_role("org_admin", "platform_admin")),
+    session: AsyncSession = Depends(get_session),
+) -> DocumentView:
+    document = await session.scalar(select(Document).where(Document.id == document_id, Document.tenant_id == principal.tenant_id))
+    if not document:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+    document.is_archived = not document.is_archived
+    document.archived_at = datetime.now(UTC) if document.is_archived else None
+    await audit(session, principal.tenant_id, principal.user_id, "document.archived" if document.is_archived else "document.restored", "document", document.id)
+    await session.commit()
+    chunk_count = await session.scalar(select(func.count(Chunk.id)).where(Chunk.document_id == document.id)) or 0
+    return DocumentView.model_validate({**document.__dict__, "chunk_count": chunk_count})
+
+
+@router.post("/ingestion-tasks/{task_id}/retry", response_model=IngestionTaskView)
+async def retry_ingestion(
+    task_id: str, principal: Principal = Depends(require_role("org_admin", "platform_admin")),
+    session: AsyncSession = Depends(get_session),
+) -> IngestionTask:
+    task = await session.scalar(select(IngestionTask).where(IngestionTask.id == task_id, IngestionTask.tenant_id == principal.tenant_id))
+    if not task:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ingestion task not found")
+    if task.status == "processing":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Ingestion task is already processing")
+    task.status = "queued"
+    task.dead_letter = False
+    task.error_message = None
+    task.next_retry_at = None
+    document = await session.scalar(select(Document).where(Document.id == task.document_id, Document.tenant_id == principal.tenant_id))
+    if not document or document.is_archived:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Document is archived or unavailable")
+    if get_settings().ingestion_mode == "broker":
+        from scripts.worker import celery_app
+        dispatched = celery_app.send_task("supplymind.documents.ingest", args=[task.id])
+        task.celery_task_id = dispatched.id
+    else:
+        await process_ingestion(session, task, document)
+    await audit(session, principal.tenant_id, principal.user_id, "document.ingestion_retried", "document", document.id, {"task_id": task.id})
+    await session.commit()
+    return task
 
 
 @router.get("/ingestion-tasks/{task_id}", response_model=IngestionTaskView)

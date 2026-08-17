@@ -1,4 +1,5 @@
 from pathlib import Path
+from time import monotonic
 
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,6 +12,7 @@ from app.services.llm import OpenAICompatibleClient
 
 async def process_ingestion(session: AsyncSession, task: IngestionTask, document: Document) -> None:
     """Idempotently process a persisted document. Safe to call from API or Celery."""
+    started = monotonic()
     task.status = "processing"
     task.attempts += 1
     document.status = "processing"
@@ -32,9 +34,13 @@ async def process_ingestion(session: AsyncSession, task: IngestionTask, document
         document.status = "completed"
         task.status = "completed"
         task.error_message = None
+        task.dead_letter = False
     except Exception as exc:
         document.status = "failed"
         document.error_message = str(exc)
         task.status = "failed"
         task.error_message = str(exc)
+        task.dead_letter = task.attempts >= task.max_attempts
         raise
+    finally:
+        task.elapsed_ms = int((monotonic() - started) * 1000)
