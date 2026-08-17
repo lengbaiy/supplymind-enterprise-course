@@ -1,16 +1,62 @@
-image:
-  repository: supplymind/api
-  tag: latest
-replicaCount: 2
-service:
-  port: 8000
-resources:
-  requests: { cpu: 250m, memory: 512Mi }
-  limits: { cpu: "1", memory: 1Gi }
-env:
+api:
+  image:
+    repository: supplymind/api
+    tag: latest
+  replicaCount: 2
+  service:
+    port: 8000
+  resources:
+    requests: { cpu: 250m, memory: 512Mi }
+    limits: { cpu: "1", memory: 1Gi }
+worker:
+  image:
+    repository: supplymind/api
+    tag: latest
+  replicaCount: 1
+  resources:
+    requests: { cpu: 250m, memory: 512Mi }
+    limits: { cpu: "1", memory: 1Gi }
+frontend:
+  image:
+    repository: supplymind/frontend
+    tag: latest
+  replicaCount: 2
+  service:
+    port: 5173
+  resources:
+    requests: { cpu: 100m, memory: 128Mi }
+    limits: { cpu: 500m, memory: 512Mi }
+ingress:
+  enabled: false
+  className: nginx
+  annotations: {}
+  hosts:
+    - host: supplymind.local
+      paths:
+        - path: /
+          pathType: Prefix
+          service: frontend
+        - path: /api
+          pathType: Prefix
+          service: api
+  tls: []
+configMap:
   SUPPLYMIND_ENV: production
-secretName: supplymind-secrets
+  SUPPLYMIND_DATABASE_URL: postgresql+psycopg://supplymind:change-me@postgresql:5432/supplymind
+  SUPPLYMIND_REDIS_URL: redis://redis:6379/0
+  SUPPLYMIND_S3_ENDPOINT: ""
+  SUPPLYMIND_S3_BUCKET: supplymind
+  SUPPLYMIND_S3_REGION: us-east-1
+  VITE_API_BASE_URL: /api/v1
+existingSecret: supplymind-secrets
+secretData: {}
 autoscaling:
+  enabled: true
   minReplicas: 2
   maxReplicas: 6
+  targetCPUUtilizationPercentage: 70
+workerAutoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 4
   targetCPUUtilizationPercentage: 70
