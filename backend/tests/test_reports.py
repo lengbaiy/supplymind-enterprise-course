@@ -1,5 +1,5 @@
 from app.models import AnalysisRun
-from app.services.reports import render_markdown
+from app.services.reports import render_markdown, render_pdf
 
 
 def test_render_markdown_contains_sql_rows_and_citations() -> None:
@@ -21,3 +21,9 @@ def test_render_markdown_contains_sql_rows_and_citations() -> None:
     assert "SELECT rate" in markdown
     assert "| 成都 | 91.4 |" in markdown
     assert citations[0]["document_name"] == "metrics.md"
+
+
+def test_render_pdf_creates_pdf(tmp_path) -> None:
+    destination = tmp_path / "report.pdf"
+    render_pdf("# 月度报告\n\n## 结论\n\n完成", str(destination))
+    assert destination.read_bytes().startswith(b"%PDF")

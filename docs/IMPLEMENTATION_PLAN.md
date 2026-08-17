@@ -29,7 +29,7 @@ This file is the execution source of truth for the enterprise course case. Each 
 
 - [x] Worker runtime verification: run a full Compose broker upload against PostgreSQL and Redis and inspect retry/failure state without duplicate chunks.
   - Verify: Docker upload returned `queued`, Worker consumed `supplymind.documents.ingest`, task reached `completed`, attempts `1`, and one chunk was persisted.
-- [ ] Report delivery: persist Markdown, export PDF in a worker, and authorize downloads by tenant and role.
+- [x] Report delivery: persist Markdown, export PDF in a worker, record checksum/status, and authorize downloads by tenant and role.
   - Done when: an analyst can download only their organization report.
 - [ ] Identity and tenancy: membership management, refresh/logout, OIDC authorization-code flow, Alembic migration, and PostgreSQL RLS policies.
   - Done when: cross-tenant access fails in API and database-policy tests.

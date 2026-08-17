@@ -1,7 +1,8 @@
 from pathlib import Path
+from hashlib import sha256 as sha256_digest
 
 from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile, status
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,6 +20,7 @@ from app.models import (
     Membership,
     Organization,
     Report,
+    ReportExport,
     User,
 )
 from app.schemas import (
@@ -36,6 +38,7 @@ from app.schemas import (
     QueryRequest,
     ReportCreate,
     ReportView,
+    ReportExportView,
     TokenResponse,
 )
 from app.services.analysis import AnalysisService
@@ -49,7 +52,7 @@ from app.services.datasource import (
 from app.services.ingestion import process_ingestion
 from app.services.knowledge import KnowledgeError, extract_text, sha256
 from app.services.llm import ModelConfigurationError, ModelResponseError
-from app.services.reports import render_markdown
+from app.services.reports import render_markdown, render_pdf
 from app.services.retrieval import search_knowledge
 
 router = APIRouter(prefix="/api/v1")
@@ -263,6 +266,73 @@ async def get_report(
     if not report:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found")
     return report
+
+
+@router.post("/reports/{report_id}/exports/pdf", response_model=ReportExportView, status_code=status.HTTP_202_ACCEPTED)
+async def export_report_pdf(
+    report_id: str,
+    principal: Principal = Depends(require_role("viewer", "analyst", "org_admin", "platform_admin")),
+    session: AsyncSession = Depends(get_session),
+) -> ReportExport:
+    report = await session.scalar(select(Report).where(Report.id == report_id, Report.tenant_id == principal.tenant_id))
+    if not report:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found")
+    existing = await session.scalar(select(ReportExport).where(
+        ReportExport.report_id == report.id, ReportExport.tenant_id == principal.tenant_id,
+        ReportExport.format == "pdf", ReportExport.status.in_(["queued", "running", "completed"]),
+    ).order_by(ReportExport.created_at.desc()))
+    if existing:
+        return existing
+    export = ReportExport(tenant_id=principal.tenant_id, report_id=report.id, created_by=principal.user_id)
+    session.add(export)
+    await session.flush()
+    if get_settings().ingestion_mode == "broker":
+        from scripts.worker import celery_app
+        task = celery_app.send_task("supplymind.reports.export_pdf", args=[export.id])
+        export.celery_task_id = task.id
+    else:
+        directory = Path(get_settings().report_directory)
+        directory.mkdir(parents=True, exist_ok=True)
+        export.file_path = str(directory / f"{report.id}-{export.id}.pdf")
+        render_pdf(report.markdown, export.file_path)
+        export.checksum_sha256 = sha256_digest(Path(export.file_path).read_bytes()).hexdigest()
+        export.status = "completed"
+    await audit(session, principal.tenant_id, principal.user_id, "report.export_queued", "report", report.id, {"export_id": export.id, "format": "pdf"})
+    await session.commit()
+    await session.refresh(export)
+    return export
+
+
+@router.get("/reports/{report_id}/exports/pdf", response_model=ReportExportView)
+async def report_pdf_status(
+    report_id: str,
+    principal: Principal = Depends(get_principal),
+    session: AsyncSession = Depends(get_session),
+) -> ReportExport:
+    export = await session.scalar(select(ReportExport).where(
+        ReportExport.report_id == report_id, ReportExport.tenant_id == principal.tenant_id,
+        ReportExport.format == "pdf",
+    ).order_by(ReportExport.created_at.desc()))
+    if not export:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="PDF export not found")
+    return export
+
+
+@router.get("/reports/{report_id}/exports/pdf/download")
+async def download_report_pdf(
+    report_id: str,
+    principal: Principal = Depends(require_role("viewer", "analyst", "org_admin", "platform_admin")),
+    session: AsyncSession = Depends(get_session),
+):
+    export = await session.scalar(select(ReportExport).where(
+        ReportExport.report_id == report_id, ReportExport.tenant_id == principal.tenant_id,
+        ReportExport.format == "pdf", ReportExport.status == "completed",
+    ).order_by(ReportExport.created_at.desc()))
+    if not export or not export.file_path or not Path(export.file_path).is_file():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="PDF is not ready")
+    await audit(session, principal.tenant_id, principal.user_id, "report.downloaded", "report", report_id, {"format": "pdf"})
+    await session.commit()
+    return FileResponse(export.file_path, media_type="application/pdf", filename=f"{report_id}.pdf")
 
 
 @router.get("/knowledge-bases/{knowledge_base_id}/documents", response_model=list[DocumentView])

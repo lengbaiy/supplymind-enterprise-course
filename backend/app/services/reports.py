@@ -1,6 +1,33 @@
 from app.models import AnalysisRun
 
 
+def render_pdf(markdown: str, destination: str) -> None:
+    """Render a readable, dependency-light PDF from report markdown."""
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import getSampleStyleSheet
+    from reportlab.lib.units import mm
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
+    from xml.sax.saxutils import escape
+
+    styles = getSampleStyleSheet()
+    story = []
+    for raw_line in markdown.splitlines():
+        line = raw_line.strip()
+        if not line:
+            story.append(Spacer(1, 4 * mm))
+            continue
+        if line.startswith("# "):
+            story.append(Paragraph(escape(line[2:]), styles["Title"]))
+        elif line.startswith("## "):
+            story.append(Paragraph(escape(line[3:]), styles["Heading2"]))
+        elif line.startswith("- "):
+            story.append(Paragraph("&#8226; " + escape(line[2:]), styles["BodyText"]))
+        else:
+            story.append(Paragraph(escape(line.replace("**", "")), styles["BodyText"]))
+    SimpleDocTemplate(destination, pagesize=A4, rightMargin=18 * mm, leftMargin=18 * mm,
+                      topMargin=16 * mm, bottomMargin=16 * mm).build(story)
+
+
 def render_markdown(run: AnalysisRun, title: str | None = None) -> tuple[str, list]:
     result = run.result or {}
     insight = result.get("insight") or "分析任务已完成，暂无结构化洞察。"

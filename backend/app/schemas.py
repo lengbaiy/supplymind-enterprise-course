@@ -96,6 +96,7 @@ class IngestionTaskView(BaseModel):
     attempts: int
     celery_task_id: str | None
     error_message: str | None
+    checksum_sha256: str | None
     created_at: datetime
     updated_at: datetime
 
@@ -119,3 +120,14 @@ class ReportView(BaseModel):
     status: str
     created_by: str
     created_at: datetime
+
+
+class ReportExportView(BaseModel):
+    id: str
+    report_id: str
+    format: str
+    status: str
+    error_message: str | None
+    celery_task_id: str | None
+    created_at: datetime
+    updated_at: datetime
