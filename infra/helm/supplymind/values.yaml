@@ -1,0 +1,16 @@
+image:
+  repository: supplymind/api
+  tag: latest
+replicaCount: 2
+service:
+  port: 8000
+resources:
+  requests: { cpu: 250m, memory: 512Mi }
+  limits: { cpu: "1", memory: 1Gi }
+env:
+  SUPPLYMIND_ENV: production
+secretName: supplymind-secrets
+autoscaling:
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 70

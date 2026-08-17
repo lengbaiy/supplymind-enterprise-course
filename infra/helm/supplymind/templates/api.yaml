@@ -1,0 +1,25 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: {{ .Release.Name }}-api }
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector: { matchLabels: { app: {{ .Release.Name }}-api } }
+  template:
+    metadata: { labels: { app: {{ .Release.Name }}-api } }
+    spec:
+      containers:
+        - name: api
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          ports: [{ containerPort: 8000 }]
+          envFrom: [{ secretRef: { name: {{ .Values.secretName }} } }]
+          env: [{ name: SUPPLYMIND_ENV, value: {{ .Values.env.SUPPLYMIND_ENV | quote }} }]
+          resources: {{- toYaml .Values.resources | nindent 12 }}
+          livenessProbe: { httpGet: { path: /api/v1/health/live, port: 8000 }, initialDelaySeconds: 10 }
+          readinessProbe: { httpGet: { path: /api/v1/health/ready, port: 8000 }, initialDelaySeconds: 10 }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: {{ .Release.Name }}-api }
+spec:
+  selector: { app: {{ .Release.Name }}-api }
+  ports: [{ port: {{ .Values.service.port }}, targetPort: 8000 }]
