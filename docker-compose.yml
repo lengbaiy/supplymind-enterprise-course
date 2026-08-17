@@ -99,6 +99,12 @@ services:
   grafana:
     image: grafana/grafana:11.3.0
     profiles: [observability]
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: supplymind-local-change-me
+    volumes:
+      - "./infra/grafana/provisioning:/etc/grafana/provisioning:ro"
+      - "./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro"
     ports: ["3000:3000"]
 volumes:
   postgres_data:
