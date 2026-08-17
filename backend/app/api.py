@@ -46,6 +46,7 @@ from app.modules.datasources.service import (
     synchronize_schema,
     test_connection,
 )
+from app.modules.knowledge.service import get_tenant_knowledge_base, search_tenant_knowledge
 from app.schemas import (
     AnalysisRequest,
     AnalysisView,
@@ -73,20 +74,8 @@ from app.services.ingestion import process_ingestion
 from app.services.knowledge import KnowledgeError, extract_text, sha256
 from app.services.llm import ModelConfigurationError, ModelResponseError
 from app.services.reports import render_markdown, render_pdf
-from app.services.retrieval import search_knowledge
 
 router = APIRouter(prefix="/api/v1")
-
-
-async def tenant_knowledge_base(session: AsyncSession, knowledge_base_id: str, tenant_id: str) -> KnowledgeBase:
-    knowledge_base = await session.scalar(
-        select(KnowledgeBase).where(
-            KnowledgeBase.id == knowledge_base_id, KnowledgeBase.tenant_id == tenant_id
-        )
-    )
-    if not knowledge_base:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Knowledge base not found")
-    return knowledge_base
 
 
 @router.post("/auth/login", response_model=TokenResponse)
@@ -362,7 +351,7 @@ async def upload_document(
     principal: Principal = Depends(require_role("org_admin", "platform_admin")),
     session: AsyncSession = Depends(get_session),
 ) -> Document:
-    knowledge_base = await tenant_knowledge_base(session, knowledge_base_id, principal.tenant_id)
+    knowledge_base = await get_tenant_knowledge_base(session, knowledge_base_id, principal.tenant_id)
     payload = await file.read()
     if len(payload) > 10 * 1024 * 1024:
         raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Document exceeds 10 MB limit")
@@ -433,9 +422,11 @@ async def search_knowledge_base(
     principal: Principal = Depends(get_principal),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
-    await tenant_knowledge_base(session, knowledge_base_id, principal.tenant_id)
+    await get_tenant_knowledge_base(session, knowledge_base_id, principal.tenant_id)
     try:
-        results = await search_knowledge(session, principal.tenant_id, knowledge_base_id, payload.query, payload.limit)
+        results = await search_tenant_knowledge(
+            session, principal.tenant_id, knowledge_base_id, payload.query, payload.limit
+        )
     except ModelConfigurationError as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
     except ModelResponseError as exc:
@@ -566,7 +557,7 @@ async def list_documents(
     principal: Principal = Depends(get_principal),
     session: AsyncSession = Depends(get_session),
 ) -> list[DocumentView]:
-    await tenant_knowledge_base(session, knowledge_base_id, principal.tenant_id)
+    await get_tenant_knowledge_base(session, knowledge_base_id, principal.tenant_id)
     documents = list(await session.scalars(select(Document).where(
         Document.knowledge_base_id == knowledge_base_id, Document.tenant_id == principal.tenant_id
     ).order_by(Document.created_at.desc())))
