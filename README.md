@@ -15,8 +15,11 @@ Open `http://localhost:5173`. The seeded organization is `demo-factory`; sign in
 
 - `backend/`: FastAPI API, tenant isolation, SQL guard, analysis workflow and audit trail.
 - `frontend/`: React console for conversations and the supply-chain dashboard.
+- `database/`: platform/source database boundary, migration index, and demo seed contract.
 - `infra/`: Docker initialization files, Prometheus profile and Helm chart.
 - `docs/`: course package and operational guidance.
+
+See `docs/ARCHITECTURE.md` for directory ownership and the incremental module extraction policy.
 
 ## Security boundary
 

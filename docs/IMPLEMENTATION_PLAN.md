@@ -33,6 +33,9 @@ This file is the execution source of truth for the enterprise course case. Each 
 
 ## Next Small Tasks
 
+- [x] S11 repository classification: backend/frontend/database/infra/docs ownership, database asset index, compatibility boundary, and runtime-file ignore rules.
+  - Verify: path checks, Compose validation, backend/frontend builds, and no local database artifacts tracked.
+
 - [ ] Framework hardening: production startup uses Alembic only; domain module boundaries are explicit.
   - Done when: development retains seeded Compose startup, production skips `create_all` and demo seeding, and new code follows `backend/app/modules` boundaries.
 

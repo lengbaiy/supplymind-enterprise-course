@@ -3,6 +3,14 @@
 __pycache__/
 *.py[cod]
 *.db
+*.sqlite
+*.sqlite3
+smoke.db
+backend/data/*.db
+data/*.db
+data/test/
+reports/
+documents/
 node_modules/
 dist/
 *.tsbuildinfo
