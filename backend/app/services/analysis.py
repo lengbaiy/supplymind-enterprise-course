@@ -57,6 +57,18 @@ class AnalysisService:
             allowed_tables = source.allowed_tables
             await audit(session, principal.tenant_id, principal.user_id, "mcp.schema.lookup_failed", "data_source", source.id, {"reason": str(exc)})
         yield self.event("step_started", {"step": "schema", "tables": allowed_tables})
+        citations: list[dict] = []
+        if request.knowledge_base_id:
+            try:
+                knowledge_tool = await tools.call("knowledge.search", principal.role, {
+                    "knowledge_base_id": request.knowledge_base_id, "query": request.question, "limit": 5,
+                })
+                citations = knowledge_tool.results
+                await audit(session, principal.tenant_id, principal.user_id, "mcp.knowledge.search", "knowledge_base", request.knowledge_base_id, {"result_count": len(citations)})
+                yield self.event("tool_result", {"tool": "knowledge.search", "result_count": len(citations), "citations": citations})
+            except (RuntimeError, OSError) as exc:
+                await audit(session, principal.tenant_id, principal.user_id, "mcp.knowledge.search_failed", "knowledge_base", request.knowledge_base_id, {"reason": str(exc)})
+                yield self.event("tool_result", {"tool": "knowledge.search", "result_count": 0, "degraded": True})
         for step, message in (("router", "Identifying analysis intent"), ("rag", "Retrieving manufacturing metric definitions")):
             session.add(AgentStep(tenant_id=principal.tenant_id, analysis_run_id=run.id, name=step, status="completed", output={"message": message}, model_version=get_settings().chat_model or "", prompt_version="analysis-v1"))
             yield self.event("step_started", {"step": step, "message": message})
@@ -93,7 +105,7 @@ class AnalysisService:
             yield self.event("failed", {"message": "Read-only query execution failed"})
             return
         chart = await tools.call("chart.render", principal.role, {"rows": rows})
-        result = {"rows": rows, "insight": plan["insight"], "chart": chart.spec, "citations": []}
+        result = {"rows": rows, "insight": plan["insight"], "chart": chart.spec, "citations": citations}
         session.add(AgentStep(tenant_id=principal.tenant_id, analysis_run_id=run.id, name="query", status="completed", output={"row_count": len(rows)}))
         session.add(AgentStep(tenant_id=principal.tenant_id, analysis_run_id=run.id, name="insight", status="completed", output={"insight": plan["insight"], "chart": result["chart"]}, model_version=get_settings().chat_model or "", prompt_version="insight-v1"))
         run.status = "completed"

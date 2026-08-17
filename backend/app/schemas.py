@@ -70,6 +70,7 @@ class QueryRequest(BaseModel):
 
 class AnalysisRequest(BaseModel):
     data_source_id: str
+    knowledge_base_id: str | None = None
     question: str = Field(min_length=5, max_length=4000)
 
 
