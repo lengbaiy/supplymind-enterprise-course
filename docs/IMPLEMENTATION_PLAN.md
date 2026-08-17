@@ -42,6 +42,7 @@ This file is the execution source of truth for the enterprise course case. Each 
 - [x] S16 knowledge domain boundary: tenant knowledge-base repository and retrieval service entry point.
 - [x] S17 analysis/report boundaries: Agent service, report repository, and Markdown/PDF service entry points.
 - [x] S18 frontend service boundary: centralized API error handling and SSE event parsing.
+- [x] S19 frontend feature boundaries: identity, datasources, knowledge, analysis, reports, dashboards, and audit ownership directories.
 
 - [ ] Framework hardening: production startup uses Alembic only; domain module boundaries are explicit.
   - Done when: development retains seeded Compose startup, production skips `create_all` and demo seeding, and new code follows `backend/app/modules` boundaries.
