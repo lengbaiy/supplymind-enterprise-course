@@ -712,4 +712,6 @@ async def ready(session: AsyncSession = Depends(get_session)) -> dict[str, str]:
 
 @router.get("/metrics")
 async def metrics() -> Response:
-    return Response("# SupplyMind application metrics are exposed through OpenTelemetry collectors\n", media_type="text/plain")
+    from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)

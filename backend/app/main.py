@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+from time import perf_counter
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -9,6 +10,7 @@ from app.core.config import get_settings
 from app.core.security import encrypt_secret, hash_password
 from app.db import SessionLocal, engine, set_tenant_context
 from app.models import Base, DataSource, Membership, Organization, User
+from app.observability import HTTP_REQUEST_DURATION, HTTP_REQUESTS
 
 
 async def seed_demo_data() -> None:
@@ -56,4 +58,16 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def metrics_middleware(request, call_next):
+    started = perf_counter()
+    response = await call_next(request)
+    route = getattr(request.scope.get("route"), "path", request.url.path)
+    HTTP_REQUESTS.labels(request.method, route, str(response.status_code)).inc()
+    HTTP_REQUEST_DURATION.labels(request.method, route).observe(perf_counter() - started)
+    return response
+
+
 app.include_router(router)
