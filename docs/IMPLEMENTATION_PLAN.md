@@ -35,6 +35,13 @@ This file is the execution source of truth for the enterprise course case. Each 
 
 - [x] S11 repository classification: backend/frontend/database/infra/docs ownership, database asset index, compatibility boundary, and runtime-file ignore rules.
   - Verify: path checks, Compose validation, backend/frontend builds, and no local database artifacts tracked.
+- [x] S12 audit domain extraction: repository, service, DTO, and router with `/api/v1/audit` compatibility.
+- [x] S13 dashboard domain extraction: persisted dashboard metadata, widget model, cache status, five-minute refresh interval, and RLS migration.
+- [x] S14 datasource domain boundary: tenant repository, gateway port, and connection/query service entry points.
+- [x] S15 tenancy boundary: JWT membership lookup, tenant context, and role dependency compatibility exports.
+- [x] S16 knowledge domain boundary: tenant knowledge-base repository and retrieval service entry point.
+- [x] S17 analysis/report boundaries: Agent service, report repository, and Markdown/PDF service entry points.
+- [x] S18 frontend service boundary: centralized API error handling and SSE event parsing.
 
 - [ ] Framework hardening: production startup uses Alembic only; domain module boundaries are explicit.
   - Done when: development retains seeded Compose startup, production skips `create_all` and demo seeding, and new code follows `backend/app/modules` boundaries.
