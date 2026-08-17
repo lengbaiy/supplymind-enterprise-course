@@ -1,69 +1,71 @@
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, ReactNode, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import * as echarts from "echarts";
 import "./styles.css";
 
 const API = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api/v1";
-type Card = { label: string; value: string; change: string };
-type Dashboard = { cards: Card[]; trend: { month: string; rate: number }[] };
 const navItems = ["运营总览", "分析会话", "数据源", "知识库", "报告中心", "组织与审计"];
+type Dashboard = { cards: { label: string; value: string; change: string }[]; trend: { month: string; rate: number }[] };
+type Source = { id: string; name: string; engine: string; host: string; database_name: string; allowed_tables: string[] };
+type KnowledgeBase = { id: string; name: string; description: string };
+type Report = { id: string; title: string; status: string; created_at: string };
+type Member = { user_id: string; email: string; display_name: string; role: string; is_active: boolean };
 
 function App() {
   const [token, setToken] = useState(localStorage.getItem("supplymind_token") || "");
+  const [refresh, setRefresh] = useState(localStorage.getItem("supplymind_refresh") || "");
+  const [nav, setNav] = useState("运营总览");
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
-  const [dataSourceId, setDataSourceId] = useState("");
+  const [sources, setSources] = useState<Source[]>([]);
+  const [knowledge, setKnowledge] = useState<KnowledgeBase[]>([]);
+  const [reports, setReports] = useState<Report[]>([]);
+  const [members, setMembers] = useState<Member[]>([]);
   const [question, setQuestion] = useState("近30天各工厂生产达成率与缺料风险");
   const [events, setEvents] = useState<string[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
+  const [notice, setNotice] = useState("");
   const [loginError, setLoginError] = useState("");
-  const [activeNav, setActiveNav] = useState("运营总览");
+  const [busy, setBusy] = useState(false);
   const chartRef = useRef<HTMLDivElement>(null);
   const headers: HeadersInit = token ? { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } : {};
-
-  async function loadWorkspace() {
+  async function api<T>(path: string, init?: RequestInit): Promise<T> {
+    const response = await fetch(`${API}${path}`, { ...init, headers: { ...headers, ...(init?.headers || {}) } });
+    if (!response.ok) throw new Error((await response.json().catch(() => ({}))).detail || "请求失败");
+    return response.status === 204 ? (undefined as T) : response.json();
+  }
+  async function load() {
     if (!token) return;
-    setRefreshing(true);
+    setBusy(true);
     try {
-      const [dashboardResponse, sourcesResponse] = await Promise.all([fetch(`${API}/dashboards/supply-chain`, { headers }), fetch(`${API}/data-sources`, { headers })]);
-      if (!dashboardResponse.ok || !sourcesResponse.ok) throw new Error("服务暂时不可用");
-      setDashboard(await dashboardResponse.json());
-      const sources = (await sourcesResponse.json()) as { id: string }[];
-      setDataSourceId(sources[0]?.id || "");
-    } catch (error) { setEvents([error instanceof Error ? error.message : "无法读取运营数据"]); }
-    finally { setRefreshing(false); }
+      const [d, s, k, r] = await Promise.all([api<Dashboard>("/dashboards/supply-chain"), api<Source[]>("/data-sources"), api<KnowledgeBase[]>("/knowledge-bases"), api<Report[]>("/reports")]);
+      setDashboard(d); setSources(s); setKnowledge(k); setReports(r);
+      if (nav === "组织与审计") setMembers(await api<Member[]>("/members"));
+    } catch (error) { setNotice(error instanceof Error ? error.message : "无法读取工作区"); }
+    finally { setBusy(false); }
   }
-  useEffect(() => { void loadWorkspace(); }, [token]);
+  useEffect(() => { void load(); }, [token, nav]);
   useEffect(() => {
-    if (!dashboard || !chartRef.current) return;
+    if (!dashboard || !chartRef.current || nav !== "运营总览") return;
     const chart = echarts.init(chartRef.current);
-    chart.setOption({ animationDuration: 450, grid: { left: 12, right: 12, top: 20, bottom: 18, containLabel: true }, tooltip: { trigger: "axis", backgroundColor: "#14352c", borderWidth: 0, textStyle: { color: "#fff" } }, xAxis: { type: "category", boundaryGap: false, data: dashboard.trend.map((x) => x.month), axisLine: { lineStyle: { color: "#d9e5df" } }, axisLabel: { color: "#73847c" } }, yAxis: { type: "value", min: 80, max: 100, splitLine: { lineStyle: { color: "#edf2ef" } }, axisLabel: { color: "#73847c", formatter: "{value}%" } }, series: [{ type: "line", data: dashboard.trend.map((x) => x.rate), smooth: 0.25, symbol: "circle", symbolSize: 7, lineStyle: { width: 3, color: "#15966d" }, itemStyle: { color: "#15966d", borderColor: "#fff", borderWidth: 2 }, areaStyle: { color: "rgba(21,150,109,0.10)" } }] });
-    const resize = () => chart.resize(); window.addEventListener("resize", resize);
-    return () => { window.removeEventListener("resize", resize); chart.dispose(); };
-  }, [dashboard]);
-  async function login(event: FormEvent) {
-    event.preventDefault(); setLoginError("");
-    const response = await fetch(`${API}/auth/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: "admin@demo.local", password: "ChangeMe123!", organization_slug: "demo-factory" }) });
-    const body = await response.json();
-    if (!response.ok) return setLoginError(body.detail || "登录失败，请稍后重试");
-    localStorage.setItem("supplymind_token", body.access_token); setToken(body.access_token);
+    chart.setOption({ grid: { left: 12, right: 12, top: 20, bottom: 18, containLabel: true }, tooltip: { trigger: "axis", backgroundColor: "#14352c", borderWidth: 0, textStyle: { color: "#fff" } }, xAxis: { type: "category", boundaryGap: false, data: dashboard.trend.map((x) => x.month), axisLabel: { color: "#73847c" } }, yAxis: { type: "value", min: 80, max: 100, axisLabel: { color: "#73847c", formatter: "{value}%" }, splitLine: { lineStyle: { color: "#edf2ef" } } }, series: [{ type: "line", smooth: true, data: dashboard.trend.map((x) => x.rate), symbol: "circle", symbolSize: 7, lineStyle: { width: 3, color: "#15966d" }, itemStyle: { color: "#15966d", borderColor: "#fff", borderWidth: 2 }, areaStyle: { color: "rgba(21,150,109,.1)" } }] });
+    const resize = () => chart.resize(); window.addEventListener("resize", resize); return () => { window.removeEventListener("resize", resize); chart.dispose(); };
+  }, [dashboard, nav]);
+  async function login(event: FormEvent) { event.preventDefault(); try { const body = await api<{ access_token: string; refresh_token?: string }>("/auth/login", { method: "POST", body: JSON.stringify({ email: "admin@demo.local", password: "ChangeMe123!", organization_slug: "demo-factory" }) }); localStorage.setItem("supplymind_token", body.access_token); if (body.refresh_token) localStorage.setItem("supplymind_refresh", body.refresh_token); setToken(body.access_token); setRefresh(body.refresh_token || ""); } catch (error) { setLoginError(error instanceof Error ? error.message : "登录失败"); } }
+  async function analyze(event: FormEvent) { event.preventDefault(); if (!sources[0]) return setNotice("当前组织没有可用数据源，请先完成接入。"); setBusy(true); setEvents(["queued · 已排队，正在读取指标口径和数据结构..."]); try { const response = await fetch(`${API}/analyses/stream`, { method: "POST", headers, body: JSON.stringify({ data_source_id: sources[0].id, knowledge_base_id: knowledge[0]?.id, question }) }); if (!response.ok) throw new Error("分析请求被拒绝"); const text = await response.text(); const parsed = text.split("\n\n").flatMap((block) => { const name = block.match(/^event: (.+)$/m)?.[1]; const raw = block.match(/^data: (.+)$/m)?.[1]; if (!name || !raw) return []; const data = JSON.parse(raw); return [`${name} · ${data.message || data.tool || data.run_id || "已完成"}`]; }); setEvents(parsed.length ? parsed : ["completed · 分析完成"]); await load(); } catch (error) { setEvents([error instanceof Error ? error.message : "分析失败"]); } finally { setBusy(false); } }
+  async function createKnowledge(event: FormEvent<HTMLFormElement>) { event.preventDefault(); const form = new FormData(event.currentTarget); try { await api("/knowledge-bases", { method: "POST", body: JSON.stringify({ name: form.get("name"), description: form.get("description") || "" }) }); event.currentTarget.reset(); setNotice("知识库已创建"); await load(); } catch (error) { setNotice(error instanceof Error ? error.message : "创建失败"); } }
+  async function downloadReport(id: string) { const response = await fetch(`${API}/reports/${id}/exports/pdf/download`, { headers }); if (!response.ok) { await api(`/reports/${id}/exports/pdf`, { method: "POST" }); return setNotice("PDF 已进入导出队列，请稍后下载"); } const url = URL.createObjectURL(await response.blob()); const link = document.createElement("a"); link.href = url; link.download = `${id}.pdf`; link.click(); URL.revokeObjectURL(url); }
+  async function logout() { if (refresh) await api("/auth/logout", { method: "POST", body: JSON.stringify({ refresh_token: refresh }) }).catch(() => undefined); localStorage.clear(); setToken(""); }
+  if (!token) return <main className="login-page"><section className="login-panel"><div className="wordmark"><span className="wordmark-mark">S</span><span>SupplyMind</span></div><p className="section-kicker">MANUFACTURING OPERATIONS / 01</p><h1>把供应链的<br /><em>下一步</em>看清楚。</h1><p className="login-copy">面向制造团队的安全数据分析工作台。连接数据源，追踪异常，并让每个结论都有依据。</p><form onSubmit={login} className="login-form"><button className="primary-button" type="submit">进入示范工作区 <span>→</span></button>{loginError && <p className="form-error">{loginError}</p>}</form><div className="login-meta"><span>示范制造集团</span><span>admin@demo.local</span></div></section><div className="login-aside"><div className="aside-grid" /><div className="aside-caption"><span>LIVE SYSTEM</span><strong>供应链运营<br />数据分析助手</strong><small>实时监测 · 安全查询 · 可追溯洞察</small></div></div></main>;
+  function page() {
+    if (nav === "数据源") return <DataView kicker="DATA SOURCES / READ ONLY" title="数据源" copy="管理组织授权的数据连接与表白名单。">{sources.length ? sources.map((s) => <article className="list-row" key={s.id}><div><strong>{s.name}</strong><p>{s.engine} · {s.host} · {s.database_name}</p></div><span className="status-chip">已授权 · {s.allowed_tables.length} 张表</span></article>) : <Empty title="还没有数据源" copy="由组织管理员接入只读 MySQL 或 PostgreSQL 数据源。" />}</DataView>;
+    if (nav === "知识库") return <DataView kicker="KNOWLEDGE / CITATIONS" title="知识库" copy="维护指标口径、制造规则与可追溯引用。"><form className="inline-form" onSubmit={createKnowledge}><input name="name" required placeholder="知识库名称" aria-label="知识库名称" /><input name="description" placeholder="描述（可选）" aria-label="知识库描述" /><button className="primary-button">创建知识库 <span>+</span></button></form>{knowledge.length ? knowledge.map((k) => <article className="list-row" key={k.id}><div><strong>{k.name}</strong><p>{k.description || "暂无描述"}</p></div><span className="status-chip">可检索</span></article>) : <Empty title="从第一套口径开始" copy="创建知识库后上传 PDF、Markdown 或 TXT 文档。" />}</DataView>;
+    if (nav === "报告中心") return <DataView kicker="REPORTS / TRACEABLE OUTPUT" title="报告中心" copy="查看分析报告并导出组织授权的 PDF。">{reports.length ? reports.map((r) => <article className="list-row" key={r.id}><div><strong>{r.title}</strong><p>{new Date(r.created_at).toLocaleString("zh-CN")}</p></div><button className="secondary-button" onClick={() => void downloadReport(r.id)}>下载 PDF</button></article>) : <Empty title="还没有报告" copy="从分析会话发起问题，完成后报告会自动出现在这里。" />}</DataView>;
+    if (nav === "组织与审计") return <DataView kicker="ORG / ACCESS CONTROL" title="组织与审计" copy="成员角色和访问状态。关键动作都会留下审计记录。">{members.length ? members.map((m) => <article className="list-row" key={m.user_id}><div><strong>{m.display_name}</strong><p>{m.email}</p></div><span className={`status-chip ${m.is_active ? "" : "muted"}`}>{m.role} · {m.is_active ? "启用" : "已停用"}</span></article>) : <Empty title="成员列表暂不可用" copy="需要组织管理员权限才能查看成员与审计数据。" />}</DataView>;
+    if (nav === "分析会话") return <DataView kicker="ANALYSIS / AGENT TRACE" title="分析会话" copy="查看模型、RAG、SQL Guard 和报告生成轨迹。"><Analysis question={question} setQuestion={setQuestion} events={events} loading={busy} onSubmit={analyze} /></DataView>;
+    return <><section className="hero-row"><div><p className="section-kicker">MONDAY · 08:42 CST</p><h1>早上好，管理员。</h1><p className="hero-copy">这里是今天的供应链运行快照。优先关注下方标记的两项风险。</p></div><div className="hero-stamp"><span>数据覆盖</span><strong>4</strong><small>个运营指标</small></div></section><section className="metric-grid">{dashboard?.cards.map((c) => <article className="metric" key={c.label}><div className="metric-label"><span className="metric-pip" />{c.label}</div><strong>{c.value}</strong><span className="metric-change">{c.change}<small>较上期</small></span></article>)}</section><section className="main-grid"><article className="panel chart-panel"><div className="panel-heading"><div><p className="section-kicker">PERFORMANCE / 30 DAYS</p><h3>生产达成率趋势</h3></div><span className="panel-meta">目标线 90%</span></div><div ref={chartRef} className="chart-canvas" /></article><article className="panel risk-panel"><div className="panel-heading"><div><p className="section-kicker">ATTENTION REQUIRED</p><h3>待处置风险</h3></div><span className="risk-count">02</span></div><div className="risk-list"><div className="risk-item"><span className="risk-mark high">!</span><div><strong>控制器缺料</strong><p>成都工厂库存低于安全库存 64%</p></div><span>→</span></div><div className="risk-item"><span className="risk-mark medium">△</span><div><strong>生产达成偏低</strong><p>成都工厂较目标低 7.4%</p></div><span>→</span></div></div><button className="text-button" onClick={() => setNav("分析会话")}>查看全部风险 <span>→</span></button></article></section><Analysis question={question} setQuestion={setQuestion} events={events} loading={busy} onSubmit={analyze} /></>;
   }
-  async function analyze(event: FormEvent) {
-    event.preventDefault();
-    if (!dataSourceId) return setEvents(["当前组织没有可用数据源，请由组织管理员先完成接入。"]);
-    setLoading(true); setEvents(["已排队，正在读取指标口径和数据结构..."]);
-    try {
-      const response = await fetch(`${API}/analyses/stream`, { method: "POST", headers, body: JSON.stringify({ data_source_id: dataSourceId, question }) });
-      if (!response.ok) throw new Error("分析请求被拒绝，请检查模型配置或数据源权限。");
-      const text = await response.text();
-      const steps = text.split("\n\n").flatMap((block) => { const eventName = block.match(/^event: (.+)$/m)?.[1]; const data = block.match(/^data: (.+)$/m)?.[1]; return eventName && data ? [`${eventName} · ${JSON.parse(data).message || "已完成"}`] : []; });
-      setEvents(steps.length ? steps : ["分析已完成，可在分析会话中查看详情。"]);
-    } catch (error) { setEvents([error instanceof Error ? error.message : "分析失败，请稍后重试"]); }
-    finally { setLoading(false); }
-  }
-  function logout() { localStorage.removeItem("supplymind_token"); setToken(""); setDashboard(null); }
-  if (!token) return <main className="login-page"><section className="login-panel"><div className="wordmark"><span className="wordmark-mark">S</span><span>SupplyMind</span></div><p className="section-kicker">MANUFACTURING OPERATIONS / 01</p><h1>把供应链的<br /><em>下一步</em>看清楚。</h1><p className="login-copy">面向制造团队的安全数据分析工作台。连接数据源，追踪异常，并让每个结论都有依据。</p><form onSubmit={login} className="login-form"><button className="primary-button" type="submit">进入示范工作区 <span aria-hidden="true">→</span></button>{loginError && <p className="form-error" role="alert">{loginError}</p>}</form><div className="login-meta"><span>示范制造集团</span><span>admin@demo.local</span></div></section><div className="login-aside"><div className="aside-grid" /><div className="aside-caption"><span>LIVE SYSTEM</span><strong>供应链运营<br />数据分析助手</strong><small>实时监测 · 安全查询 · 可追溯洞察</small></div></div></main>;
-  return <main className="app-shell"><aside className="sidebar"><div className="sidebar-top"><div className="wordmark"><span className="wordmark-mark">S</span><span>SupplyMind</span></div><span className="environment-badge">DEMO</span></div><div className="workspace-switch"><span className="workspace-dot" /><span><small>当前组织</small><strong>示范制造集团</strong></span><span className="chevron">⌄</span></div><nav aria-label="主导航">{navItems.map((label, index) => <button key={label} className={`nav-item ${activeNav === label ? "active" : ""}`} onClick={() => setActiveNav(label)}><span>{label}</span><small>{index ? `0${index}` : "TODAY"}</small></button>)}</nav><div className="sidebar-footer"><div className="status-line"><span className="status-dot" />所有系统正常</div><button className="logout-button" onClick={logout}>退出工作区</button></div></aside><section className="workspace"><header className="topbar"><div><p className="section-kicker">{activeNav === "运营总览" ? "OPERATIONS / OVERVIEW" : `WORKSPACE / ${activeNav.toUpperCase()}`}</p><h2>{activeNav}</h2></div><div className="topbar-actions"><span className="last-sync">最后同步 <strong>刚刚</strong></span><button className="icon-button" onClick={() => void loadWorkspace()} disabled={refreshing} aria-label="刷新数据" title="刷新数据">↻</button><div className="avatar">管</div></div></header>{activeNav !== "运营总览" ? <section className="placeholder-view"><span className="placeholder-index">0{navItems.indexOf(activeNav)}</span><h3>{activeNav}正在准备中</h3><p>该模块将接入组织级数据和权限控制，当前可先从运营总览发起分析。</p><button className="secondary-button" onClick={() => setActiveNav("运营总览")}>返回运营总览</button></section> : <><section className="hero-row"><div><p className="section-kicker">MONDAY · 08:42 CST</p><h1>早上好，管理员。</h1><p className="hero-copy">这里是今天的供应链运行快照。优先关注下方标记的两项风险。</p></div><div className="hero-stamp"><span>数据覆盖</span><strong>4</strong><small>个运营指标</small></div></section><section className="metric-grid" aria-label="关键指标">{dashboard?.cards.map((card) => <article className="metric" key={card.label}><div className="metric-label"><span className="metric-pip" />{card.label}</div><strong>{card.value}</strong><span className="metric-change">{card.change}<small>较上期</small></span></article>) || Array.from({ length: 4 }, (_, index) => <article className="metric skeleton" key={index}><span /><span /><span /></article>)}</section><section className="main-grid"><article className="panel chart-panel"><div className="panel-heading"><div><p className="section-kicker">PERFORMANCE / 30 DAYS</p><h3>生产达成率趋势</h3></div><span className="panel-meta">目标线 90%</span></div><div ref={chartRef} className="chart-canvas" /></article><article className="panel risk-panel"><div className="panel-heading"><div><p className="section-kicker">ATTENTION REQUIRED</p><h3>待处置风险</h3></div><span className="risk-count">02</span></div><div className="risk-list"><div className="risk-item"><span className="risk-mark high">!</span><div><strong>控制器缺料</strong><p>成都工厂库存低于安全库存 64%</p></div><span className="risk-arrow">→</span></div><div className="risk-item"><span className="risk-mark medium">△</span><div><strong>生产达成偏低</strong><p>成都工厂较目标低 7.4%</p></div><span className="risk-arrow">→</span></div></div><button className="text-button">查看全部风险 <span>→</span></button></article></section><section className="analyst-panel"><div className="analyst-intro"><div className="analyst-icon">✦</div><div><p className="section-kicker">ANALYSIS ASSISTANT</p><h3>问一个供应链问题</h3><p>系统会检索指标口径，生成受限 SQL，并保留每一步依据。</p></div></div><form onSubmit={analyze} className="analyst-form"><input value={question} onChange={(event) => setQuestion(event.target.value)} aria-label="供应链问题" /><button className="primary-button" type="submit" disabled={loading}>{loading ? "分析中..." : "开始分析"}<span aria-hidden="true">↗</span></button></form>{events.length > 0 && <div className="event-log" aria-live="polite">{events.map((item, index) => <p key={`${item}-${index}`}><span>{String(index + 1).padStart(2, "0")}</span>{item}</p>)}</div>}</section></>}</section></main>;
+  return <main className="app-shell"><aside className="sidebar"><div className="sidebar-top"><div className="wordmark"><span className="wordmark-mark">S</span><span>SupplyMind</span></div><span className="environment-badge">DEMO</span></div><div className="workspace-switch"><span className="workspace-dot" /><span><small>当前组织</small><strong>示范制造集团</strong></span></div><nav aria-label="主导航">{navItems.map((item, i) => <button key={item} className={`nav-item ${nav === item ? "active" : ""}`} onClick={() => setNav(item)}><span>{item}</span><small>{i ? `0${i}` : "TODAY"}</small></button>)}</nav><div className="sidebar-footer"><div className="status-line"><span className="status-dot" />所有系统正常</div><button className="logout-button" onClick={() => void logout()}>退出工作区</button></div></aside><section className="workspace"><header className="topbar"><div><p className="section-kicker">{nav === "运营总览" ? "OPERATIONS / OVERVIEW" : `WORKSPACE / ${nav.toUpperCase()}`}</p><h2>{nav}</h2></div><div className="topbar-actions"><span className="last-sync">最后同步 <strong>刚刚</strong></span><button className="icon-button" onClick={() => void load()} disabled={busy} aria-label="刷新数据" title="刷新数据">↻</button><div className="avatar">管</div></div></header>{notice && <div className="notice" role="status">{notice}</div>}{page()}</section></main>;
 }
-
+function Analysis({ question, setQuestion, events, loading, onSubmit }: { question: string; setQuestion: (v: string) => void; events: string[]; loading: boolean; onSubmit: (e: FormEvent) => void }) { return <section className="analyst-panel standalone"><div className="analyst-intro"><div className="analyst-icon">✦</div><div><p className="section-kicker">ANALYSIS ASSISTANT</p><h3>问一个供应链问题</h3><p>结果包含安全 SQL、图表、引用和报告。</p></div></div><form onSubmit={onSubmit} className="analyst-form"><input value={question} onChange={(e) => setQuestion(e.target.value)} aria-label="供应链问题" /><button className="primary-button" disabled={loading}>{loading ? "分析中..." : "开始分析"}<span>↗</span></button></form>{events.length > 0 && <div className="event-log" aria-live="polite">{events.map((e, i) => <p key={`${e}-${i}`}><span>{String(i + 1).padStart(2, "0")}</span>{e}</p>)}</div>}</section>; }
+function DataView({ kicker, title, copy, children }: { kicker: string; title: string; copy: string; children: ReactNode }) { return <section className="data-view"><div className="view-intro"><div><p className="section-kicker">{kicker}</p><h1>{title}</h1><p>{copy}</p></div></div><div className="source-list">{children}</div></section>; }
+function Empty({ title, copy }: { title: string; copy: string }) { return <div className="empty-state"><span>—</span><strong>{title}</strong><p>{copy}</p></div>; }
 createRoot(document.getElementById("root")!).render(<App />);
