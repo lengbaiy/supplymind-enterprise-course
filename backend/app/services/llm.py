@@ -14,6 +14,28 @@ class ModelResponseError(RuntimeError):
 
 
 class OpenAICompatibleClient:
+    async def embed(self, texts: list[str]) -> list[list[float]]:
+        settings = get_settings()
+        if not settings.embedding_base_url or not settings.embedding_model or not settings.embedding_api_key:
+            raise ModelConfigurationError("Embedding model configuration is required for knowledge retrieval")
+        url = f"{settings.embedding_base_url.rstrip('/')}/embeddings"
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.post(
+                url,
+                headers={"Authorization": f"Bearer {settings.embedding_api_key}"},
+                json={"model": settings.embedding_model, "input": texts},
+            )
+        if response.status_code >= 400:
+            raise ModelResponseError("Embedding model request failed")
+        try:
+            rows = response.json()["data"]
+            vectors = [row["embedding"] for row in sorted(rows, key=lambda row: row["index"])]
+            if len(vectors) != len(texts) or not all(isinstance(vector, list) for vector in vectors):
+                raise TypeError("Embedding response fields are invalid")
+            return vectors
+        except (KeyError, IndexError, TypeError, ValueError) as exc:
+            raise ModelResponseError("Embedding model returned an invalid response") from exc
+
     async def plan_sql(self, question: str, schema: list[str]) -> dict:
         settings = get_settings()
         if not settings.chat_base_url or not settings.chat_model or not settings.chat_api_key:

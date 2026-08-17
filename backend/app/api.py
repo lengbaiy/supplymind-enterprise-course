@@ -29,6 +29,7 @@ from app.schemas import (
     IngestionTaskView,
     KnowledgeBaseCreate,
     KnowledgeBaseView,
+    KnowledgeSearchRequest,
     LoginRequest,
     Principal,
     QueryRequest,
@@ -44,6 +45,8 @@ from app.services.datasource import (
 )
 from app.services.ingestion import process_ingestion
 from app.services.knowledge import KnowledgeError, extract_text, sha256
+from app.services.llm import ModelConfigurationError, ModelResponseError
+from app.services.retrieval import search_knowledge
 
 router = APIRouter(prefix="/api/v1")
 
@@ -175,6 +178,25 @@ async def get_ingestion_task(
     if not task:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ingestion task not found")
     return task
+
+
+@router.post("/knowledge-bases/{knowledge_base_id}/search")
+async def search_knowledge_base(
+    knowledge_base_id: str,
+    payload: KnowledgeSearchRequest,
+    principal: Principal = Depends(get_principal),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    await tenant_knowledge_base(session, knowledge_base_id, principal.tenant_id)
+    try:
+        results = await search_knowledge(session, principal.tenant_id, knowledge_base_id, payload.query, payload.limit)
+    except ModelConfigurationError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+    except ModelResponseError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+    await audit(session, principal.tenant_id, principal.user_id, "knowledge.searched", "knowledge_base", knowledge_base_id, {"result_count": len(results)})
+    await session.commit()
+    return {"query": payload.query, "results": results}
 
 
 @router.get("/knowledge-bases/{knowledge_base_id}/documents", response_model=list[DocumentView])

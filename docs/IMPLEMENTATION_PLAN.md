@@ -16,13 +16,15 @@ This file is the execution source of truth for the enterprise course case. Each 
   - Verify: knowledge upload/list integration test and tenant filters.
 - [x] Document ingestion state machine: persisted idempotency key, source storage, chunk replacement, completed/failed status, retry counter, task inspection endpoint, and Celery worker entry point.
   - Verify: upload integration test asserts completed task state; worker task is importable and bounded to tenant-owned records.
+- [x] Embedding integration boundary: OpenAI-compatible `/embeddings` client, optional ingestion-time vector persistence, cosine ranking service, and tenant-scoped search endpoint with cited document/chunk locations.
+  - Verify: embedding fail-closed test and cosine ranking unit test; live provider verification remains environment-dependent.
 
 ## Next Small Tasks
 
 - [ ] Worker dispatch hardening: route document tasks through Celery by default in deployed environments while retaining eager local development mode.
   - Done when: Compose worker consumes an upload task and API can inspect retry/failure state without duplicate chunks.
-- [ ] Real embeddings and retrieval: call the configured OpenAI-compatible embedding endpoint and retrieve cited chunks.
-  - Done when: a search response returns text, score, document name, and chunk location.
+- [ ] Retrieval integration verification: mock the embedding provider in an API integration test and verify cited search results plus cross-tenant denial.
+  - Done when: a search response returns text, score, document name, and chunk location under a mocked provider.
 - [ ] Report delivery: persist Markdown, export PDF in a worker, and authorize downloads by tenant and role.
   - Done when: an analyst can download only their organization report.
 - [ ] Identity and tenancy: membership management, refresh/logout, OIDC authorization-code flow, Alembic migration, and PostgreSQL RLS policies.
