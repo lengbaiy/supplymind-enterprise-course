@@ -7,6 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.sql_guard import SQLGuardError, validate_read_only_sql
+from app.mcp.registry import ToolRegistry
+from app.mcp.tools import register_default_tools
 from app.models import AgentStep, AnalysisRun, Conversation, DataSource, Report
 from app.schemas import AnalysisRequest, Principal
 from app.services.audit import audit
@@ -45,6 +47,8 @@ class AnalysisService:
         session.add(run)
         await session.flush()
         yield self.event("queued", {"run_id": run.id})
+        tools = ToolRegistry()
+        register_default_tools(tools, session, principal)
         for step, message in (("router", "Identifying analysis intent"), ("rag", "Retrieving manufacturing metric definitions"), ("schema", "Reading approved schema metadata")):
             session.add(AgentStep(tenant_id=principal.tenant_id, analysis_run_id=run.id, name=step, status="completed", output={"message": message}, model_version=get_settings().chat_model or "", prompt_version="analysis-v1"))
             yield self.event("step_started", {"step": step, "message": message})
@@ -78,7 +82,8 @@ class AnalysisService:
             await session.commit()
             yield self.event("failed", {"message": "Read-only query execution failed"})
             return
-        result = {"rows": rows, "insight": plan["insight"], "chart": self.chart_spec(rows), "citations": []}
+        chart = await tools.call("chart.render", principal.role, {"rows": rows})
+        result = {"rows": rows, "insight": plan["insight"], "chart": chart.spec, "citations": []}
         session.add(AgentStep(tenant_id=principal.tenant_id, analysis_run_id=run.id, name="query", status="completed", output={"row_count": len(rows)}))
         session.add(AgentStep(tenant_id=principal.tenant_id, analysis_run_id=run.id, name="insight", status="completed", output={"insight": plan["insight"], "chart": result["chart"]}, model_version=get_settings().chat_model or "", prompt_version="insight-v1"))
         run.status = "completed"

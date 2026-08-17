@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from enum import StrEnum
@@ -57,4 +58,12 @@ class ToolRegistry:
         if role not in definition.minimum_roles:
             raise PermissionError(f"Role {role} cannot call {name}")
         input_value = definition.input_model.model_validate(payload)
-        return await self._handlers[name](input_value)
+        last_error: Exception | None = None
+        for attempt in range(2):
+            try:
+                return await asyncio.wait_for(self._handlers[name](input_value), definition.timeout_seconds)
+            except (TimeoutError, OSError, RuntimeError) as exc:
+                last_error = exc
+                if attempt == 0:
+                    await asyncio.sleep(0)
+        raise RuntimeError(f"MCP tool failed: {name}") from last_error
