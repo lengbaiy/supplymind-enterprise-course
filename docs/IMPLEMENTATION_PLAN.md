@@ -33,6 +33,13 @@ This file is the execution source of truth for the enterprise course case. Each 
 
 ## Next Small Tasks
 
+### P00 - 测试与工程基线修正
+
+- [x] 测试显式区分 eager 本地模式与 Compose broker 模式，避免异步任务状态被错误断言为同步完成。
+- [x] 增加容器化 Helm lint/template 校验命令，不依赖开发机安装 Helm CLI。
+- [x] 保持 Compose broker 上传、Worker 消费和幂等行为不变。
+  - Verify: eager backend suite `20 passed`; Compose health checks and broker worker verification remain valid; `docker compose config --quiet` passes.
+
 - [x] S11 repository classification: backend/frontend/database/infra/docs ownership, database asset index, compatibility boundary, and runtime-file ignore rules.
   - Verify: path checks, Compose validation, backend/frontend builds, and no local database artifacts tracked.
 - [x] S12 audit domain extraction: repository, service, DTO, and router with `/api/v1/audit` compatibility.

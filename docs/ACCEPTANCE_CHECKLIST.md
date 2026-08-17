@@ -5,7 +5,9 @@
 - [ ] 16 GB 内存 Docker Desktop 可启动 Compose 核心服务。
 - [ ] API `/api/v1/health/live` 返回 `ok`，`/api/v1/health/ready` 返回 `ready`。
 - [ ] 前端首页可打开，MinIO 控制台可登录。
-- [ ] `pytest`、Ruff、前端 build、`docker compose config` 和 `helm lint` 通过。
+- [ ] `pytest`、Ruff、前端 build、`docker compose config` 和容器化 `helm lint` 通过。
+
+测试模式约定：后端单元/集成测试显式使用 `SUPPLYMIND_INGESTION_MODE=eager`；Compose 验收必须使用 `broker` 并检查 Worker 将任务推进到 `completed`。
 
 ## 功能
 

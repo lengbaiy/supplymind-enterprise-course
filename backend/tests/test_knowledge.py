@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 def test_knowledge_base_upload_and_tenant_scope(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setenv("SUPPLYMIND_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path / 'knowledge.db'}")
     monkeypatch.setenv("SUPPLYMIND_JWT_SECRET", "test-secret-that-is-long-enough-for-tests")
+    monkeypatch.setenv("SUPPLYMIND_INGESTION_MODE", "eager")
     from app.core.config import get_settings
 
     get_settings.cache_clear()
@@ -71,6 +72,7 @@ def test_duplicate_upload_is_idempotent(monkeypatch, tmp_path: Path) -> None:
 def test_search_returns_citations_and_rejects_unknown_tenant_resource(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setenv("SUPPLYMIND_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path / 'search.db'}")
     monkeypatch.setenv("SUPPLYMIND_JWT_SECRET", "test-secret-that-is-long-enough-for-tests")
+    monkeypatch.setenv("SUPPLYMIND_INGESTION_MODE", "eager")
     monkeypatch.setenv("SUPPLYMIND_EMBEDDING_BASE_URL", "https://embedding.test/v1")
     monkeypatch.setenv("SUPPLYMIND_EMBEDDING_MODEL", "test-embedding")
     monkeypatch.setenv("SUPPLYMIND_EMBEDDING_API_KEY", "test-key")

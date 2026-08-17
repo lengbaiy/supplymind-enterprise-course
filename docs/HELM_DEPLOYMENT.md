@@ -2,6 +2,18 @@
 
 Helm chart 位于 `infra/helm/supplymind`，默认只部署 API、Worker 和前端，不在集群内创建 PostgreSQL、Redis 或对象存储。
 
+## Chart 校验
+
+发布前必须执行 lint 和模板渲染。开发机不要求预装 Helm，可使用临时容器完成校验：
+
+```powershell
+docker run --rm -v "${PWD}:/work" -w /work alpine/helm:3.16.3 lint infra/helm/supplymind
+docker run --rm -v "${PWD}:/work" -w /work alpine/helm:3.16.3 template supplymind infra/helm/supplymind > .helm-rendered.yaml
+Remove-Item .helm-rendered.yaml -ErrorAction SilentlyContinue
+```
+
+如果 Docker Hub 暂时不可用，可在可访问镜像仓库中使用相同版本的 Helm 3.16 镜像；不得将渲染产物提交到仓库。
+
 生产环境应先创建密钥并通过 `existingSecret` 注入，例如：
 
 ```bash
