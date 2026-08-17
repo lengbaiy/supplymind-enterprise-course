@@ -39,6 +39,13 @@ from app.models import (
     ReportExport,
     User,
 )
+from app.modules.datasources.service import (
+    DataSourceError,
+    execute_guarded_query,
+    get_tenant_source,
+    synchronize_schema,
+    test_connection,
+)
 from app.schemas import (
     AnalysisRequest,
     AnalysisView,
@@ -62,12 +69,6 @@ from app.schemas import (
 )
 from app.services.analysis import AnalysisService
 from app.services.audit import audit
-from app.services.datasource import (
-    DataSourceError,
-    execute_guarded_query,
-    synchronize_schema,
-    test_connection,
-)
 from app.services.ingestion import process_ingestion
 from app.services.knowledge import KnowledgeError, extract_text, sha256
 from app.services.llm import ModelConfigurationError, ModelResponseError
@@ -602,22 +603,16 @@ async def create_data_source(
     return source
 
 
-async def tenant_data_source(session: AsyncSession, source_id: str, tenant_id: str) -> DataSource:
-    source = await session.scalar(
-        select(DataSource).where(DataSource.id == source_id, DataSource.tenant_id == tenant_id)
-    )
-    if not source:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Data source not found")
-    return source
-
-
 @router.post("/data-sources/{source_id}/test")
 async def test_data_source(
     source_id: str,
     principal: Principal = Depends(require_role("org_admin", "platform_admin")),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
-    source = await tenant_data_source(session, source_id, principal.tenant_id)
+    try:
+        source = await get_tenant_source(session, source_id, principal.tenant_id)
+    except DataSourceError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     try:
         result = await test_connection(source)
     except DataSourceError as exc:
@@ -635,7 +630,10 @@ async def sync_data_source(
     principal: Principal = Depends(require_role("org_admin", "platform_admin")),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
-    source = await tenant_data_source(session, source_id, principal.tenant_id)
+    try:
+        source = await get_tenant_source(session, source_id, principal.tenant_id)
+    except DataSourceError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     try:
         schema = await synchronize_schema(source)
     except DataSourceError as exc:
@@ -654,7 +652,10 @@ async def query_data_source(
     principal: Principal = Depends(require_role("analyst", "org_admin", "platform_admin")),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
-    source = await tenant_data_source(session, source_id, principal.tenant_id)
+    try:
+        source = await get_tenant_source(session, source_id, principal.tenant_id)
+    except DataSourceError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     try:
         guarded, rows = await execute_guarded_query(source, payload.sql)
     except DataSourceError as exc:
