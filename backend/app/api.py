@@ -39,6 +39,7 @@ from app.models import (
     ReportExport,
     User,
 )
+from app.modules.analysis.service import AnalysisService
 from app.modules.datasources.service import (
     DataSourceError,
     execute_guarded_query,
@@ -69,7 +70,6 @@ from app.schemas import (
     ReportView,
     TokenResponse,
 )
-from app.services.analysis import AnalysisService
 from app.services.audit import audit
 from app.services.ingestion import process_ingestion
 from app.services.knowledge import KnowledgeError, extract_text, sha256
