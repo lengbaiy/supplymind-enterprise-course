@@ -9,8 +9,8 @@ smoke.db
 backend/data/*.db
 data/*.db
 data/test/
-reports/
-documents/
+/reports/
+/documents/
 node_modules/
 dist/
 *.tsbuildinfo
