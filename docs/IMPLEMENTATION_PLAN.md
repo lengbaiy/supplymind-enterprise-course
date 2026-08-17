@@ -57,6 +57,16 @@ This file is the execution source of truth for the enterprise course case. Each 
   - Done when: Compose runs the documented end-to-end scenario and browser tests pass.
   - Constraint: any frontend implementation must load both `taste-skill` and `impeccable` first.
 
+## Five-Point Acceptance Progress (2026-08-17)
+
+- [x] Knowledge document upload: multipart upload, idempotent ingestion task, status/chunk display, and worker-backed processing.
+- [x] Analysis detail: SSE completion preserves guarded SQL, result rows, chart specification, citations, and report/PDF action.
+- [x] Real demo sources: Compose now runs isolated PostgreSQL and MySQL teaching databases with repeatable supply-chain seed data and read-only credentials.
+- [x] Model/RAG connectivity: container configuration reaches the DeepSeek-compatible chat endpoint and Alibaba Bailian embedding endpoint; failures remain fail-closed.
+- [x] Docker acceptance pass: API, Worker, frontend, platform PostgreSQL, Redis, MinIO, both demo databases, Prometheus, and Grafana are healthy; backend tests pass in-container and frontend build passes.
+
+The five points validate the course demonstration path. Production-scale SLA, disaster-recovery rehearsal, and large-scale load testing remain outside the course acceptance scope.
+
 ## Detailed Backlog
 
 The following slices are intentionally ordered by dependency. Each slice has one primary acceptance result and should be committed separately.

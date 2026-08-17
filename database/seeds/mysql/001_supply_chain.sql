@@ -43,3 +43,36 @@ VALUES
   ('WO-20260801', '成都工厂', '智能控制', 1000, 930, CURRENT_DATE - INTERVAL 5 DAY),
   ('WO-20260802', '苏州工厂', '新能源', 800, 760, CURRENT_DATE - INTERVAL 4 DAY),
   ('WO-20260803', '成都工厂', '新能源', 600, 510, CURRENT_DATE - INTERVAL 3 DAY);
+
+CREATE TABLE IF NOT EXISTS quality_inspections (
+  inspection_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  work_order_id BIGINT NOT NULL,
+  inspected_quantity DECIMAL(14,2) NOT NULL,
+  passed_quantity DECIMAL(14,2) NOT NULL,
+  inspected_at DATE NOT NULL,
+  CONSTRAINT fk_quality_work_order FOREIGN KEY (work_order_id) REFERENCES production_work_orders(work_order_id)
+);
+CREATE TABLE IF NOT EXISTS sales_orders (
+  sales_order_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  order_number VARCHAR(40) NOT NULL UNIQUE,
+  factory VARCHAR(80) NOT NULL,
+  product_line VARCHAR(80) NOT NULL,
+  ordered_quantity DECIMAL(14,2) NOT NULL,
+  delivered_quantity DECIMAL(14,2) NOT NULL DEFAULT 0,
+  promised_date DATE NOT NULL,
+  delivered_date DATE
+);
+CREATE TABLE IF NOT EXISTS delivery_plans (
+  delivery_plan_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  sales_order_id BIGINT NOT NULL,
+  planned_date DATE NOT NULL,
+  status VARCHAR(32) NOT NULL,
+  CONSTRAINT fk_delivery_sales_order FOREIGN KEY (sales_order_id) REFERENCES sales_orders(sales_order_id)
+);
+INSERT IGNORE INTO quality_inspections (work_order_id, inspected_quantity, passed_quantity, inspected_at)
+SELECT work_order_id, planned_quantity, completed_quantity - 12, planned_date FROM production_work_orders;
+INSERT IGNORE INTO sales_orders (order_number, factory, product_line, ordered_quantity, delivered_quantity, promised_date)
+VALUES ('SO-20260801', '成都工厂', '智能控制', 500, 420, CURRENT_DATE + INTERVAL 3 DAY),
+       ('SO-20260802', '苏州工厂', '新能源', 380, 380, CURRENT_DATE - INTERVAL 1 DAY);
+INSERT IGNORE INTO delivery_plans (sales_order_id, planned_date, status)
+SELECT sales_order_id, promised_date, IF(delivered_quantity >= ordered_quantity, 'completed', 'at_risk') FROM sales_orders;
