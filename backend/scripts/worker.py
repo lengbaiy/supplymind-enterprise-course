@@ -57,7 +57,7 @@ def export_report_pdf(self, export_id: str) -> str:
                     export.checksum_sha256 = sha256_digest(path.read_bytes()).hexdigest()
                     export.status = "completed"
                     export.error_message = None
-                except Exception as exc:
+                except (OSError, RuntimeError, ValueError) as exc:
                     export.status = "failed"
                     export.error_message = str(exc)[:500]
             export.celery_task_id = self.request.id

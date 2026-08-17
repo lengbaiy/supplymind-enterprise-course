@@ -3,12 +3,12 @@ from app.models import AnalysisRun
 
 def render_pdf(markdown: str, destination: str) -> None:
     """Render a readable, dependency-light PDF from report markdown."""
+    from xml.sax.saxutils import escape
+
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import getSampleStyleSheet
     from reportlab.lib.units import mm
     from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
-    from xml.sax.saxutils import escape
-
     styles = getSampleStyleSheet()
     story = []
     for raw_line in markdown.splitlines():
