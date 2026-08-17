@@ -14,11 +14,13 @@ This file is the execution source of truth for the enterprise course case. Each 
   - Verify: registry role/schema test.
 - [x] Knowledge storage: tenant-scoped knowledge bases, documents, and chunks with administrator CRUD/upload APIs.
   - Verify: knowledge upload/list integration test and tenant filters.
+- [x] Document ingestion state machine: persisted idempotency key, source storage, chunk replacement, completed/failed status, retry counter, task inspection endpoint, and Celery worker entry point.
+  - Verify: upload integration test asserts completed task state; worker task is importable and bounded to tenant-owned records.
 
 ## Next Small Tasks
 
-- [ ] Document ingestion: upload PDF/Markdown/TXT, extract text, split chunks, enqueue work, and persist task state.
-  - Done when: a document reaches `completed` or an inspectable `failed` state.
+- [ ] Worker dispatch hardening: route document tasks through Celery by default in deployed environments while retaining eager local development mode.
+  - Done when: Compose worker consumes an upload task and API can inspect retry/failure state without duplicate chunks.
 - [ ] Real embeddings and retrieval: call the configured OpenAI-compatible embedding endpoint and retrieve cited chunks.
   - Done when: a search response returns text, score, document name, and chunk location.
 - [ ] Report delivery: persist Markdown, export PDF in a worker, and authorize downloads by tenant and role.

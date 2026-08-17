@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     oidc_client_secret: str | None = None
     oidc_redirect_uri: str = "http://localhost:5173/auth/callback"
     report_directory: str = "./data/reports"
+    document_directory: str = "./data/documents"
 
     @property
     def cors_origin_list(self) -> list[str]:

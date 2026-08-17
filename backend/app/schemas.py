@@ -85,4 +85,16 @@ class DocumentView(BaseModel):
     content_type: str
     status: str
     chunk_count: int
+    ingestion_task_id: str | None = None
     created_at: datetime
+
+
+class IngestionTaskView(BaseModel):
+    id: str
+    document_id: str
+    status: str
+    attempts: int
+    celery_task_id: str | None
+    error_message: str | None
+    created_at: datetime
+    updated_at: datetime

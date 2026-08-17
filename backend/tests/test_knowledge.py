@@ -23,9 +23,15 @@ def test_knowledge_base_upload_and_tenant_scope(monkeypatch, tmp_path: Path) -> 
         uploaded = client.post(
             f"/api/v1/knowledge-bases/{knowledge_base_id}/documents",
             headers=headers,
-            files={"file": ("rules.md", "production_rate = completed / planned".encode(), "text/markdown")},
+            files={"file": ("rules.md", b"production_rate = completed / planned", "text/markdown")},
         )
         assert uploaded.status_code == 201
+        assert uploaded.json()["status"] == "completed"
+        task = client.get(
+            f"/api/v1/ingestion-tasks/{uploaded.json()['ingestion_task_id']}", headers=headers
+        )
+        assert task.status_code == 200
+        assert task.json()["status"] == "completed"
         assert uploaded.json()["chunk_count"] == 1
         listed = client.get(f"/api/v1/knowledge-bases/{knowledge_base_id}/documents", headers=headers)
         assert listed.status_code == 200

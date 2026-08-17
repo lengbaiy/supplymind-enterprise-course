@@ -1,24 +1,38 @@
+from pathlib import Path
+
 from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.security import create_access_token, encrypt_secret, verify_password
 from app.db import get_session
 from app.dependencies import get_principal, require_role
-from app.models import AnalysisRun, Chunk, DataSource, Document, KnowledgeBase, Membership, Organization, User
+from app.models import (
+    AnalysisRun,
+    Chunk,
+    DataSource,
+    Document,
+    IngestionTask,
+    KnowledgeBase,
+    Membership,
+    Organization,
+    User,
+)
 from app.schemas import (
     AnalysisRequest,
     AnalysisView,
     DataSourceCreate,
     DataSourceView,
+    DocumentView,
+    IngestionTaskView,
+    KnowledgeBaseCreate,
+    KnowledgeBaseView,
     LoginRequest,
     Principal,
     QueryRequest,
     TokenResponse,
-    DocumentView,
-    KnowledgeBaseCreate,
-    KnowledgeBaseView,
 )
 from app.services.analysis import AnalysisService
 from app.services.audit import audit
@@ -28,7 +42,8 @@ from app.services.datasource import (
     synchronize_schema,
     test_connection,
 )
-from app.services.knowledge import KnowledgeError, chunk_text, extract_text, sha256
+from app.services.ingestion import process_ingestion
+from app.services.knowledge import KnowledgeError, extract_text, sha256
 
 router = APIRouter(prefix="/api/v1")
 
@@ -117,28 +132,49 @@ async def upload_document(
     if len(payload) > 10 * 1024 * 1024:
         raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Document exceeds 10 MB limit")
     try:
-        text, metadata = extract_text(file.filename or "document.txt", file.content_type or "application/octet-stream", payload)
+        extract_text(file.filename or "document.txt", file.content_type or "application/octet-stream", payload)
     except KnowledgeError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    digest = sha256(payload)
+    storage_dir = Path(get_settings().document_directory)
+    storage_dir.mkdir(parents=True, exist_ok=True)
+    source_path = storage_dir / digest
+    source_path.write_bytes(payload)
     document = Document(
         tenant_id=principal.tenant_id,
         knowledge_base_id=knowledge_base.id,
         filename=file.filename or "document.txt",
         content_type=file.content_type or "application/octet-stream",
-        content_sha256=sha256(payload),
+        content_sha256=digest,
         created_by=principal.user_id,
-        status="processed",
+        status="queued",
+        source_path=str(source_path),
     )
     session.add(document)
     await session.flush()
-    for ordinal, chunk, location in chunk_text(text):
-        location.update(metadata)
-        session.add(Chunk(tenant_id=principal.tenant_id, document_id=document.id, ordinal=ordinal, text=chunk, location=location))
+    task = IngestionTask(tenant_id=principal.tenant_id, document_id=document.id, task_key=f"{principal.tenant_id}:{digest}")
+    session.add(task)
+    await session.flush()
+    await process_ingestion(session, task, document)
     await audit(session, principal.tenant_id, principal.user_id, "document.uploaded", "document", document.id, {"filename": document.filename})
     await session.commit()
     await session.refresh(document)
     chunk_count = await session.scalar(select(func.count(Chunk.id)).where(Chunk.document_id == document.id)) or 0
-    return DocumentView.model_validate({**document.__dict__, "chunk_count": chunk_count})
+    return DocumentView.model_validate({**document.__dict__, "chunk_count": chunk_count, "ingestion_task_id": task.id})
+
+
+@router.get("/ingestion-tasks/{task_id}", response_model=IngestionTaskView)
+async def get_ingestion_task(
+    task_id: str,
+    principal: Principal = Depends(get_principal),
+    session: AsyncSession = Depends(get_session),
+) -> IngestionTask:
+    task = await session.scalar(select(IngestionTask).where(
+        IngestionTask.id == task_id, IngestionTask.tenant_id == principal.tenant_id
+    ))
+    if not task:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ingestion task not found")
+    return task
 
 
 @router.get("/knowledge-bases/{knowledge_base_id}/documents", response_model=list[DocumentView])
