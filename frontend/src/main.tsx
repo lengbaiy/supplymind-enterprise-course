@@ -2,6 +2,8 @@ import { FormEvent, ReactNode, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import * as echarts from "echarts";
 import "./styles.css";
+import { apiRequest } from "./services/api";
+import { parseSseEvents } from "./services/sse";
 
 const API = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api/v1";
 const navItems = ["运营总览", "分析会话", "数据源", "知识库", "报告中心", "组织与审计"];
@@ -28,9 +30,7 @@ function App() {
   const chartRef = useRef<HTMLDivElement>(null);
   const headers: HeadersInit = token ? { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } : {};
   async function api<T>(path: string, init?: RequestInit): Promise<T> {
-    const response = await fetch(`${API}${path}`, { ...init, headers: { ...headers, ...(init?.headers || {}) } });
-    if (!response.ok) throw new Error((await response.json().catch(() => ({}))).detail || "请求失败");
-    return response.status === 204 ? (undefined as T) : response.json();
+    return apiRequest<T>(API, token, path, init);
   }
   async function load() {
     if (!token) return;
@@ -50,7 +50,7 @@ function App() {
     const resize = () => chart.resize(); window.addEventListener("resize", resize); return () => { window.removeEventListener("resize", resize); chart.dispose(); };
   }, [dashboard, nav]);
   async function login(event: FormEvent) { event.preventDefault(); try { const body = await api<{ access_token: string; refresh_token?: string }>("/auth/login", { method: "POST", body: JSON.stringify({ email: "admin@demo.local", password: "ChangeMe123!", organization_slug: "demo-factory" }) }); localStorage.setItem("supplymind_token", body.access_token); if (body.refresh_token) localStorage.setItem("supplymind_refresh", body.refresh_token); setToken(body.access_token); setRefresh(body.refresh_token || ""); } catch (error) { setLoginError(error instanceof Error ? error.message : "登录失败"); } }
-  async function analyze(event: FormEvent) { event.preventDefault(); if (!sources[0]) return setNotice("当前组织没有可用数据源，请先完成接入。"); setBusy(true); setEvents(["queued · 已排队，正在读取指标口径和数据结构..."]); try { const response = await fetch(`${API}/analyses/stream`, { method: "POST", headers, body: JSON.stringify({ data_source_id: sources[0].id, knowledge_base_id: knowledge[0]?.id, question }) }); if (!response.ok) throw new Error("分析请求被拒绝"); const text = await response.text(); const parsed = text.split("\n\n").flatMap((block) => { const name = block.match(/^event: (.+)$/m)?.[1]; const raw = block.match(/^data: (.+)$/m)?.[1]; if (!name || !raw) return []; const data = JSON.parse(raw); return [`${name} · ${data.message || data.tool || data.run_id || "已完成"}`]; }); setEvents(parsed.length ? parsed : ["completed · 分析完成"]); await load(); } catch (error) { setEvents([error instanceof Error ? error.message : "分析失败"]); } finally { setBusy(false); } }
+  async function analyze(event: FormEvent) { event.preventDefault(); if (!sources[0]) return setNotice("当前组织没有可用数据源，请先完成接入。"); setBusy(true); setEvents(["queued · 已排队，正在读取指标口径和数据结构..."]); try { const response = await fetch(`${API}/analyses/stream`, { method: "POST", headers, body: JSON.stringify({ data_source_id: sources[0].id, knowledge_base_id: knowledge[0]?.id, question }) }); if (!response.ok) throw new Error("分析请求被拒绝"); const parsed = parseSseEvents(await response.text()).map(({ event, data }) => `${event} · ${String(data.message || data.tool || data.run_id || "已完成")}`); setEvents(parsed.length ? parsed : ["completed · 分析完成"]); await load(); } catch (error) { setEvents([error instanceof Error ? error.message : "分析失败"]); } finally { setBusy(false); } }
   async function createKnowledge(event: FormEvent<HTMLFormElement>) { event.preventDefault(); const form = new FormData(event.currentTarget); try { await api("/knowledge-bases", { method: "POST", body: JSON.stringify({ name: form.get("name"), description: form.get("description") || "" }) }); event.currentTarget.reset(); setNotice("知识库已创建"); await load(); } catch (error) { setNotice(error instanceof Error ? error.message : "创建失败"); } }
   async function downloadReport(id: string) { const response = await fetch(`${API}/reports/${id}/exports/pdf/download`, { headers }); if (!response.ok) { await api(`/reports/${id}/exports/pdf`, { method: "POST" }); return setNotice("PDF 已进入导出队列，请稍后下载"); } const url = URL.createObjectURL(await response.blob()); const link = document.createElement("a"); link.href = url; link.download = `${id}.pdf`; link.click(); URL.revokeObjectURL(url); }
   async function logout() { if (refresh) await api("/auth/logout", { method: "POST", body: JSON.stringify({ refresh_token: refresh }) }).catch(() => undefined); localStorage.clear(); setToken(""); }
