@@ -685,21 +685,6 @@ async def list_analyses(
     return list(result)
 
 
-@router.get("/dashboards/supply-chain")
-async def supply_chain_dashboard(principal: Principal = Depends(get_principal)) -> dict:
-    return {
-        "tenant_id": principal.tenant_id,
-        "refreshed_at": "2026-08-16T10:00:00Z",
-        "cards": [
-            {"label": "生产达成率", "value": "91.4%", "change": "+1.8%"},
-            {"label": "缺料物料", "value": "12", "change": "-3"},
-            {"label": "质量合格率", "value": "98.2%", "change": "+0.4%"},
-            {"label": "订单准时交付", "value": "94.7%", "change": "+2.1%"},
-        ],
-        "trend": [{"month": "3月", "rate": 88.2}, {"month": "4月", "rate": 89.6}, {"month": "5月", "rate": 90.1}, {"month": "6月", "rate": 91.4}],
-    }
-
-
 @router.get("/health/live")
 async def live() -> dict[str, str]:
     return {"status": "ok"}

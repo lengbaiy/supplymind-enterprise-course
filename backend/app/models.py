@@ -118,6 +118,25 @@ class AgentStep(TenantModel, Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class Dashboard(TenantModel, Base):
+    __tablename__ = "dashboards"
+    name: Mapped[str] = mapped_column(String(160))
+    slug: Mapped[str] = mapped_column(String(80))
+    refresh_interval_seconds: Mapped[int] = mapped_column(Integer, default=300)
+    cached_payload: Mapped[dict] = mapped_column(JSON, default=dict)
+    cached_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class DashboardWidget(TenantModel, Base):
+    __tablename__ = "dashboard_widgets"
+    dashboard_id: Mapped[str] = mapped_column(ForeignKey("dashboards.id"), index=True)
+    key: Mapped[str] = mapped_column(String(80))
+    widget_type: Mapped[str] = mapped_column(String(40))
+    config: Mapped[dict] = mapped_column(JSON, default=dict)
+    position: Mapped[int] = mapped_column(Integer, default=0)
+
+
 class KnowledgeBase(TenantModel, Base):
     __tablename__ = "knowledge_bases"
     name: Mapped[str] = mapped_column(String(160))

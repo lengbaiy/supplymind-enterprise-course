@@ -27,6 +27,8 @@ def test_seeded_user_can_log_in_and_read_dashboard(monkeypatch, tmp_path: Path) 
         )
         assert dashboard.status_code == 200
         assert len(dashboard.json()["cards"]) == 4
+        assert dashboard.json()["dashboard_id"]
+        assert dashboard.json()["refresh_interval_seconds"] == 300
         refresh_token = response.json()["refresh_token"]
         rotated = client.post("/api/v1/auth/refresh", json={"refresh_token": refresh_token})
         assert rotated.status_code == 200
