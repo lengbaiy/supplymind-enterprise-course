@@ -1,0 +1,71 @@
+name: SupplyMind CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install backend dependencies
+        run: pip install ".[dev]"
+      - name: Ruff
+        run: ruff check app scripts tests
+      - name: Unit and integration tests
+        run: pytest -q
+      - name: Alembic revision check
+        run: alembic heads && alembic history
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run build
+
+  manifests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Compose file
+        run: docker compose config --quiet
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.16.4
+      - name: Lint Helm chart
+        run: helm lint infra/helm/supplymind
+      - name: Render Helm chart
+        run: helm template supplymind infra/helm/supplymind > /tmp/supplymind-rendered.yaml
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install audit tooling
+        run: pip install pip-audit
+      - name: Audit Python dependencies
+        working-directory: backend
+        run: pip install . && pip-audit --local
