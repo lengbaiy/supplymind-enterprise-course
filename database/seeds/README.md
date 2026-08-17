@@ -16,3 +16,8 @@ Seed scripts must be versioned, repeatable, and idempotent. They must create a
 dedicated read-only account for analysis examples and must never be used as the
 platform database seed. The current platform demo seed remains in
 `backend/app/main.py` until the tenancy module extraction is complete.
+
+Equivalent starter scripts are available at `postgresql/001_supply_chain.sql`
+and `mysql/001_supply_chain.sql`. The PostgreSQL script contains the complete
+course schema; the MySQL script covers the core supplier, material, production,
+and inventory path and can be extended during the datasource lesson.
