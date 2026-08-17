@@ -40,6 +40,10 @@ def hash_refresh_token(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
+def hash_oidc_state(state: str) -> str:
+    return hashlib.sha256(state.encode()).hexdigest()
+
+
 def decode_access_token(token: str) -> dict[str, Any]:
     try:
         return jwt.decode(token, get_settings().jwt_secret, algorithms=["HS256"])

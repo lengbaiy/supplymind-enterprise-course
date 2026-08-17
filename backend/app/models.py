@@ -52,6 +52,15 @@ class RefreshToken(UUIDPrimaryKey, Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class OIDCLoginState(UUIDPrimaryKey, Base):
+    __tablename__ = "oidc_login_states"
+    state_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    nonce: Mapped[str] = mapped_column(String(128))
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class DataSource(TenantModel, Base):
     __tablename__ = "data_sources"
     name: Mapped[str] = mapped_column(String(160))

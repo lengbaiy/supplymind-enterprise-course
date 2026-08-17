@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     oidc_client_id: str | None = None
     oidc_client_secret: str | None = None
     oidc_redirect_uri: str = "http://localhost:5173/auth/callback"
+    oidc_state_ttl_seconds: int = 300
     report_directory: str = "./data/reports"
     document_directory: str = "./data/documents"
     ingestion_mode: str = "eager"

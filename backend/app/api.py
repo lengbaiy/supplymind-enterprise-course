@@ -1,7 +1,11 @@
+import secrets
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256 as sha256_digest
 from pathlib import Path
+from urllib.parse import urlencode
 
+import httpx
+import jwt
 from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile, status
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy import func, select
@@ -12,6 +16,8 @@ from app.core.security import (
     create_access_token,
     create_refresh_token,
     encrypt_secret,
+    hash_oidc_state,
+    hash_password,
     hash_refresh_token,
     verify_password,
 )
@@ -25,6 +31,7 @@ from app.models import (
     IngestionTask,
     KnowledgeBase,
     Membership,
+    OIDCLoginState,
     Organization,
     RefreshToken,
     Report,
@@ -144,6 +151,100 @@ async def logout(payload: RefreshRequest, session: AsyncSession = Depends(get_se
         await audit(session, stored.organization_id, stored.user_id, "auth.logout", "refresh_token", stored.id)
         await session.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+async def oidc_discovery() -> dict:
+    issuer = get_settings().oidc_issuer
+    if not issuer or not get_settings().oidc_client_id:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="OIDC is not configured")
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
+            response = await client.get(f"{issuer.rstrip('/')}/.well-known/openid-configuration")
+            response.raise_for_status()
+            return response.json()
+    except (httpx.HTTPError, ValueError) as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="OIDC discovery failed") from exc
+
+
+@router.get("/auth/oidc/start")
+async def oidc_start(organization_slug: str, session: AsyncSession = Depends(get_session)) -> Response:
+    organization = await session.scalar(select(Organization).where(Organization.slug == organization_slug))
+    if not organization:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found")
+    metadata = await oidc_discovery()
+    state, nonce = secrets.token_urlsafe(32), secrets.token_urlsafe(24)
+    session.add(OIDCLoginState(
+        state_hash=hash_oidc_state(state), nonce=nonce, organization_id=organization.id,
+        expires_at=datetime.now(UTC) + timedelta(seconds=get_settings().oidc_state_ttl_seconds),
+    ))
+    await session.commit()
+    params = {"client_id": get_settings().oidc_client_id, "response_type": "code",
+              "scope": "openid email profile", "redirect_uri": get_settings().oidc_redirect_uri,
+              "state": state, "nonce": nonce}
+    return Response(status_code=status.HTTP_307_TEMPORARY_REDIRECT,
+                    headers={"location": f"{metadata['authorization_endpoint']}?{urlencode(params)}"})
+
+
+@router.get("/auth/oidc/callback", response_model=TokenResponse)
+async def oidc_callback(code: str, state: str, session: AsyncSession = Depends(get_session)) -> TokenResponse:
+    login_state = await session.scalar(select(OIDCLoginState).where(OIDCLoginState.state_hash == hash_oidc_state(state)))
+    now = datetime.now(UTC)
+    expires_at = login_state.expires_at.replace(tzinfo=UTC) if login_state and login_state.expires_at.tzinfo is None else (login_state.expires_at if login_state else now)
+    if not login_state or login_state.consumed_at or expires_at <= now:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired OIDC state")
+    metadata = await oidc_discovery()
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            token_response = await client.post(metadata["token_endpoint"], data={
+                "grant_type": "authorization_code", "code": code, "redirect_uri": get_settings().oidc_redirect_uri,
+                "client_id": get_settings().oidc_client_id, "client_secret": get_settings().oidc_client_secret,
+            })
+            token_response.raise_for_status()
+            token_data = token_response.json()
+            id_token = token_data["id_token"]
+            header = jwt.get_unverified_header(id_token)
+            jwks_response = await client.get(metadata["jwks_uri"])
+            jwks_response.raise_for_status()
+            jwk = next((key for key in jwks_response.json().get("keys", []) if key.get("kid") == header.get("kid")), None)
+            if not jwk:
+                raise ValueError("OIDC signing key not found")
+            signing_key = jwt.algorithms.RSAAlgorithm.from_jwk(jwk)
+            claims = jwt.decode(id_token, signing_key, algorithms=[header.get("alg", "RS256")],
+                                audience=get_settings().oidc_client_id, issuer=get_settings().oidc_issuer)
+            if claims.get("iss") != get_settings().oidc_issuer or claims.get("nonce") != login_state.nonce:
+                raise ValueError("OIDC claims validation failed")
+            profile = claims
+            if not profile.get("email") and metadata.get("userinfo_endpoint"):
+                userinfo = await client.get(metadata["userinfo_endpoint"], headers={"Authorization": f"Bearer {token_data['access_token']}"})
+                userinfo.raise_for_status()
+                profile = userinfo.json()
+    except (httpx.HTTPError, KeyError, ValueError, jwt.PyJWTError) as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="OIDC callback failed") from exc
+    email = str(profile.get("email", "")).lower().strip()
+    if not email:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OIDC email claim is required")
+    user = await session.scalar(select(User).where(User.email == email))
+    if not user:
+        user = User(email=email, display_name=str(profile.get("name") or email.split("@", 1)[0]), password_hash=hash_password(secrets.token_urlsafe(32)))
+        session.add(user)
+        await session.flush()
+    membership = await session.scalar(select(Membership).where(
+        Membership.organization_id == login_state.organization_id, Membership.user_id == user.id
+    ))
+    if not membership:
+        membership = Membership(organization_id=login_state.organization_id, user_id=user.id, role="viewer")
+        session.add(membership)
+    if not membership.is_active:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization access denied")
+    raw_refresh = create_refresh_token()
+    session.add(RefreshToken(
+        token_hash=hash_refresh_token(raw_refresh), user_id=user.id, organization_id=login_state.organization_id,
+        expires_at=now + timedelta(days=get_settings().refresh_token_days),
+    ))
+    login_state.consumed_at = now
+    await audit(session, login_state.organization_id, user.id, "auth.oidc_login", "user", user.id)
+    await session.commit()
+    return TokenResponse(access_token=create_access_token(user.id, login_state.organization_id, membership.role), refresh_token=raw_refresh)
 
 
 @router.get("/me")
