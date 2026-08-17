@@ -47,6 +47,7 @@ from app.modules.datasources.service import (
     test_connection,
 )
 from app.modules.knowledge.service import get_tenant_knowledge_base, search_tenant_knowledge
+from app.modules.reports.service import get_tenant_report, render_markdown, render_pdf
 from app.schemas import (
     AnalysisRequest,
     AnalysisView,
@@ -73,7 +74,6 @@ from app.services.audit import audit
 from app.services.ingestion import process_ingestion
 from app.services.knowledge import KnowledgeError, extract_text, sha256
 from app.services.llm import ModelConfigurationError, ModelResponseError
-from app.services.reports import render_markdown, render_pdf
 
 router = APIRouter(prefix="/api/v1")
 
@@ -478,9 +478,7 @@ async def get_report(
     principal: Principal = Depends(get_principal),
     session: AsyncSession = Depends(get_session),
 ) -> Report:
-    report = await session.scalar(select(Report).where(Report.id == report_id, Report.tenant_id == principal.tenant_id))
-    if not report:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found")
+    report = await get_tenant_report(session, report_id, principal.tenant_id)
     return report
 
 
@@ -490,9 +488,7 @@ async def export_report_pdf(
     principal: Principal = Depends(require_role("viewer", "analyst", "org_admin", "platform_admin")),
     session: AsyncSession = Depends(get_session),
 ) -> ReportExport:
-    report = await session.scalar(select(Report).where(Report.id == report_id, Report.tenant_id == principal.tenant_id))
-    if not report:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found")
+    report = await get_tenant_report(session, report_id, principal.tenant_id)
     existing = await session.scalar(select(ReportExport).where(
         ReportExport.report_id == report.id, ReportExport.tenant_id == principal.tenant_id,
         ReportExport.format == "pdf", ReportExport.status.in_(["queued", "running", "completed"]),
