@@ -34,6 +34,16 @@ class MemberRoleUpdate(BaseModel):
     role: Role
 
 
+class AuditEventView(BaseModel):
+    id: str
+    actor_id: str | None
+    action: str
+    resource_type: str
+    resource_id: str | None
+    details: dict
+    occurred_at: datetime
+
+
 class Principal(BaseModel):
     user_id: str
     tenant_id: str
