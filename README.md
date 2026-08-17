@@ -21,6 +21,8 @@ Open `http://localhost:5173`. The seeded organization is `demo-factory`; sign in
 
 See `docs/ARCHITECTURE.md` for directory ownership and the incremental module extraction policy.
 
+For continuation in a new Codex window, read `docs/CODEX_HANDOFF.md` first. It records the current commit, completed capabilities, verification commands, remaining backlog, and non-negotiable project rules.
+
 ## Security boundary
 
 Only source-database accounts with read-only permissions are supported. Every submitted SQL statement is parsed and checked before execution; only one `SELECT` or `WITH` statement may run. Credentials are encrypted at rest and never returned from the API.
