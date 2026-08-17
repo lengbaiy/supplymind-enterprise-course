@@ -103,3 +103,19 @@ class IngestionTaskView(BaseModel):
 class KnowledgeSearchRequest(BaseModel):
     query: str = Field(min_length=2, max_length=2000)
     limit: int = Field(default=5, ge=1, le=20)
+
+
+class ReportCreate(BaseModel):
+    analysis_run_id: str
+    title: str | None = Field(default=None, max_length=240)
+
+
+class ReportView(BaseModel):
+    id: str
+    analysis_run_id: str
+    title: str
+    markdown: str
+    citations: list
+    status: str
+    created_by: str
+    created_at: datetime

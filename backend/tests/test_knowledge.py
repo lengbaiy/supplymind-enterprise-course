@@ -66,3 +66,49 @@ def test_duplicate_upload_is_idempotent(monkeypatch, tmp_path: Path) -> None:
         assert first.status_code == second.status_code == 201
         assert first.json()["id"] == second.json()["id"]
         assert client.get(f"/api/v1/knowledge-bases/{knowledge_base['id']}/documents", headers=headers).json().__len__() == 1
+
+
+def test_search_returns_citations_and_rejects_unknown_tenant_resource(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("SUPPLYMIND_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path / 'search.db'}")
+    monkeypatch.setenv("SUPPLYMIND_JWT_SECRET", "test-secret-that-is-long-enough-for-tests")
+    monkeypatch.setenv("SUPPLYMIND_EMBEDDING_BASE_URL", "https://embedding.test/v1")
+    monkeypatch.setenv("SUPPLYMIND_EMBEDDING_MODEL", "test-embedding")
+    monkeypatch.setenv("SUPPLYMIND_EMBEDDING_API_KEY", "test-key")
+    from app.core.config import get_settings
+    from app.services.llm import OpenAICompatibleClient
+
+    async def fake_embed(self, texts: list[str]) -> list[list[float]]:
+        return [[1.0, 0.0] for _ in texts]
+
+    monkeypatch.setattr(OpenAICompatibleClient, "embed", fake_embed)
+    get_settings.cache_clear()
+    from app.main import app
+
+    with TestClient(app) as client:
+        login = client.post("/api/v1/auth/login", json={
+            "email": "admin@demo.local", "password": "ChangeMe123!", "organization_slug": "demo-factory"
+        })
+        headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+        knowledge_base = client.post("/api/v1/knowledge-bases", headers=headers, json={"name": "检索验收库"}).json()
+        upload = client.post(
+            f"/api/v1/knowledge-bases/{knowledge_base['id']}/documents",
+            headers=headers,
+            files={"file": ("metric.md", b"Production attainment is completed quantity divided by planned quantity.", "text/markdown")},
+        )
+        assert upload.status_code == 201
+        search = client.post(
+            f"/api/v1/knowledge-bases/{knowledge_base['id']}/search",
+            headers=headers,
+            json={"query": "production attainment", "limit": 3},
+        )
+        assert search.status_code == 200
+        result = search.json()["results"][0]
+        assert result["document_name"] == "metric.md"
+        assert result["score"] == 1.0
+        assert "location" in result
+        denied = client.post(
+            "/api/v1/knowledge-bases/not-owned-by-this-tenant/search",
+            headers=headers,
+            json={"query": "production", "limit": 3},
+        )
+        assert denied.status_code == 404

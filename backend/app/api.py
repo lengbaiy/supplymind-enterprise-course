@@ -18,6 +18,7 @@ from app.models import (
     KnowledgeBase,
     Membership,
     Organization,
+    Report,
     User,
 )
 from app.schemas import (
@@ -33,6 +34,8 @@ from app.schemas import (
     LoginRequest,
     Principal,
     QueryRequest,
+    ReportCreate,
+    ReportView,
     TokenResponse,
 )
 from app.services.analysis import AnalysisService
@@ -46,6 +49,7 @@ from app.services.datasource import (
 from app.services.ingestion import process_ingestion
 from app.services.knowledge import KnowledgeError, extract_text, sha256
 from app.services.llm import ModelConfigurationError, ModelResponseError
+from app.services.reports import render_markdown
 from app.services.retrieval import search_knowledge
 
 router = APIRouter(prefix="/api/v1")
@@ -211,6 +215,54 @@ async def search_knowledge_base(
     await audit(session, principal.tenant_id, principal.user_id, "knowledge.searched", "knowledge_base", knowledge_base_id, {"result_count": len(results)})
     await session.commit()
     return {"query": payload.query, "results": results}
+
+
+@router.post("/reports", response_model=ReportView, status_code=status.HTTP_201_CREATED)
+async def create_report(
+    payload: ReportCreate,
+    principal: Principal = Depends(require_role("analyst", "org_admin", "platform_admin")),
+    session: AsyncSession = Depends(get_session),
+) -> Report:
+    run = await session.scalar(select(AnalysisRun).where(
+        AnalysisRun.id == payload.analysis_run_id, AnalysisRun.tenant_id == principal.tenant_id
+    ))
+    if not run:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Analysis run not found")
+    markdown, citations = render_markdown(run, payload.title)
+    report = Report(
+        tenant_id=principal.tenant_id,
+        analysis_run_id=run.id,
+        title=payload.title or f"供应链分析报告 · {run.question[:80]}",
+        markdown=markdown,
+        citations=citations,
+        created_by=principal.user_id,
+    )
+    session.add(report)
+    await session.flush()
+    await audit(session, principal.tenant_id, principal.user_id, "report.created", "report", report.id, {"analysis_run_id": run.id})
+    await session.commit()
+    await session.refresh(report)
+    return report
+
+
+@router.get("/reports", response_model=list[ReportView])
+async def list_reports(
+    principal: Principal = Depends(get_principal), session: AsyncSession = Depends(get_session)
+) -> list[Report]:
+    result = await session.scalars(select(Report).where(Report.tenant_id == principal.tenant_id).order_by(Report.created_at.desc()))
+    return list(result)
+
+
+@router.get("/reports/{report_id}", response_model=ReportView)
+async def get_report(
+    report_id: str,
+    principal: Principal = Depends(get_principal),
+    session: AsyncSession = Depends(get_session),
+) -> Report:
+    report = await session.scalar(select(Report).where(Report.id == report_id, Report.tenant_id == principal.tenant_id))
+    if not report:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found")
+    return report
 
 
 @router.get("/knowledge-bases/{knowledge_base_id}/documents", response_model=list[DocumentView])
