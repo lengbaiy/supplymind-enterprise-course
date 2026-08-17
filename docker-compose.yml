@@ -15,6 +15,30 @@ services:
     image: redis:7-alpine
     command: redis-server --appendonly yes
     volumes: [redis_data:/data]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+  minio:
+    image: minio/minio:RELEASE.2024-10-13T13-34-11Z
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: supplymind
+      MINIO_ROOT_PASSWORD: supplymind-local-change-me
+    volumes: [minio_data:/data]
+    ports: ["9000:9000", "9001:9001"]
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+  minio-init:
+    image: minio/minio:RELEASE.2024-10-13T13-34-11Z
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["mc alias set local http://minio:9000 supplymind supplymind-local-change-me && mc mb --ignore-existing local/supplymind"]
+    depends_on:
+      minio: { condition: service_healthy }
   api:
     build: ./backend
     env_file: .env
@@ -22,10 +46,20 @@ services:
       SUPPLYMIND_DATABASE_URL: postgresql+psycopg://supplymind:supplymind@postgres:5432/supplymind
       SUPPLYMIND_REDIS_URL: redis://redis:6379/0
       SUPPLYMIND_INGESTION_MODE: broker
+      SUPPLYMIND_DOCUMENT_DIRECTORY: /data/documents
+      SUPPLYMIND_REPORT_DIRECTORY: /data/reports
+      SUPPLYMIND_S3_ENDPOINT: http://minio:9000
+      SUPPLYMIND_S3_BUCKET: supplymind
+      SUPPLYMIND_S3_ACCESS_KEY: supplymind
+      SUPPLYMIND_S3_SECRET_KEY: supplymind-local-change-me
     ports: ["8000:8000"]
+    volumes:
+      - documents_data:/data/documents
+      - reports_data:/data/reports
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_started }
+      minio: { condition: service_healthy }
   worker:
     build: ./backend
     command: celery -A scripts.worker.celery_app worker --loglevel=INFO
@@ -34,12 +68,29 @@ services:
       SUPPLYMIND_DATABASE_URL: postgresql+psycopg://supplymind:supplymind@postgres:5432/supplymind
       SUPPLYMIND_REDIS_URL: redis://redis:6379/0
       SUPPLYMIND_INGESTION_MODE: broker
-    depends_on: [postgres, redis]
+      SUPPLYMIND_DOCUMENT_DIRECTORY: /data/documents
+      SUPPLYMIND_REPORT_DIRECTORY: /data/reports
+      SUPPLYMIND_S3_ENDPOINT: http://minio:9000
+      SUPPLYMIND_S3_BUCKET: supplymind
+      SUPPLYMIND_S3_ACCESS_KEY: supplymind
+      SUPPLYMIND_S3_SECRET_KEY: supplymind-local-change-me
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      minio: { condition: service_healthy }
+    volumes:
+      - documents_data:/data/documents
+      - reports_data:/data/reports
   frontend:
     build: ./frontend
     environment: { VITE_API_BASE_URL: http://localhost:8000/api/v1 }
     ports: ["5173:5173"]
     depends_on: [api]
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:5173/"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
   prometheus:
     image: prom/prometheus:v2.54.1
     profiles: [observability]
@@ -52,3 +103,6 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  minio_data:
+  documents_data:
+  reports_data:

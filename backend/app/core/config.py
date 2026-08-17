@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     report_directory: str = "./data/reports"
     document_directory: str = "./data/documents"
     ingestion_mode: str = "eager"
+    s3_endpoint: str | None = None
+    s3_bucket: str = "supplymind"
+    s3_access_key: str | None = None
+    s3_secret_key: str | None = None
 
     @property
     def cors_origin_list(self) -> list[str]:
