@@ -40,6 +40,15 @@ This file is the execution source of truth for the enterprise course case. Each 
 - [x] 保持 Compose broker 上传、Worker 消费和幂等行为不变。
   - Verify: eager backend suite `20 passed`; Compose health checks and broker worker verification remain valid; `docker compose config --quiet` passes.
 
+### P01 - 项目管理与组织权限
+
+- [x] 组织摘要接口：成员、数据源、知识库、报告和大屏资源计数。
+- [x] 组织配额读取/更新接口：并发分析、每日运行、文档大小和保留期限。
+- [x] 固定角色权限矩阵接口，并将配额变更写入审计事件。
+- [x] 前端项目管理页接入真实组织数据、配额编辑和权限矩阵。
+- [ ] 成员邀请和完整成员 CRUD 延续到身份与租户切块，避免重复实现认证关联。
+  - Verify: migration `0004_organization_quotas`, backend `21 passed`, Ruff, frontend build, API live/ready.
+
 - [x] S11 repository classification: backend/frontend/database/infra/docs ownership, database asset index, compatibility boundary, and runtime-file ignore rules.
   - Verify: path checks, Compose validation, backend/frontend builds, and no local database artifacts tracked.
 - [x] S12 audit domain extraction: repository, service, DTO, and router with `/api/v1/audit` compatibility.

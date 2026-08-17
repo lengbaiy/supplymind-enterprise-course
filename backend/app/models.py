@@ -22,6 +22,12 @@ class Organization(UUIDPrimaryKey, Base):
     __tablename__ = "organizations"
     slug: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     name: Mapped[str] = mapped_column(String(160))
+    quota_config: Mapped[dict] = mapped_column(JSON, default=lambda: {
+        "max_concurrent_analyses": 4,
+        "daily_analysis_runs": 100,
+        "max_document_size_mb": 10,
+        "retention_days": 90,
+    })
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

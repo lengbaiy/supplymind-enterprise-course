@@ -40,6 +40,31 @@ class Principal(BaseModel):
     role: Role
 
 
+class OrganizationSummary(BaseModel):
+    id: str
+    slug: str
+    name: str
+    role: Role
+    member_count: int
+    active_member_count: int
+    data_source_count: int
+    knowledge_base_count: int
+    report_count: int
+    dashboard_count: int
+    quota: dict[str, int]
+
+
+class QuotaUpdate(BaseModel):
+    max_concurrent_analyses: int = Field(ge=1, le=100)
+    daily_analysis_runs: int = Field(ge=1, le=100_000)
+    max_document_size_mb: int = Field(ge=1, le=1024)
+    retention_days: int = Field(ge=1, le=3650)
+
+
+class PermissionMatrixView(BaseModel):
+    roles: dict[str, dict[str, bool]]
+
+
 class DataSourceCreate(BaseModel):
     name: str = Field(min_length=2, max_length=160)
     engine: Literal["mysql", "postgresql"]

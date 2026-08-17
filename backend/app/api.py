@@ -27,6 +27,7 @@ from app.dependencies import get_principal, require_role
 from app.models import (
     AnalysisRun,
     Chunk,
+    Dashboard,
     DataSource,
     Document,
     IngestionTask,
@@ -62,8 +63,11 @@ from app.schemas import (
     LoginRequest,
     MemberRoleUpdate,
     MemberView,
+    OrganizationSummary,
+    PermissionMatrixView,
     Principal,
     QueryRequest,
+    QuotaUpdate,
     RefreshRequest,
     ReportCreate,
     ReportExportView,
@@ -245,6 +249,71 @@ async def oidc_callback(code: str, state: str, session: AsyncSession = Depends(g
 @router.get("/me")
 async def me(principal: Principal = Depends(get_principal)) -> Principal:
     return principal
+
+
+@router.get("/organization", response_model=OrganizationSummary)
+async def organization_summary(
+    principal: Principal = Depends(get_principal),
+    session: AsyncSession = Depends(get_session),
+) -> OrganizationSummary:
+    organization = await session.scalar(select(Organization).where(Organization.id == principal.tenant_id))
+    if not organization:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found")
+    counts = {}
+    for key, model in (
+        ("member_count", Membership),
+        ("data_source_count", DataSource),
+        ("knowledge_base_count", KnowledgeBase),
+        ("report_count", Report),
+    ):
+        column = Membership.organization_id if model is Membership else model.tenant_id
+        counts[key] = int(await session.scalar(select(func.count()).select_from(model).where(column == principal.tenant_id)) or 0)
+    counts["active_member_count"] = int(await session.scalar(select(func.count()).select_from(Membership).where(
+        Membership.organization_id == principal.tenant_id, Membership.is_active.is_(True)
+    )) or 0)
+    counts["dashboard_count"] = int(await session.scalar(select(func.count()).select_from(Dashboard).where(
+        Dashboard.tenant_id == principal.tenant_id
+    )) or 0)
+    quota = organization.quota_config or {}
+    return OrganizationSummary(
+        id=organization.id, slug=organization.slug, name=organization.name, role=principal.role,
+        quota=quota, **counts,
+    )
+
+
+@router.get("/organization/quotas", response_model=dict[str, int])
+async def get_organization_quotas(
+    principal: Principal = Depends(get_principal), session: AsyncSession = Depends(get_session)
+) -> dict[str, int]:
+    organization = await session.scalar(select(Organization).where(Organization.id == principal.tenant_id))
+    if not organization:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found")
+    return organization.quota_config or {}
+
+
+@router.patch("/organization/quotas", response_model=dict[str, int])
+async def update_organization_quotas(
+    payload: QuotaUpdate,
+    principal: Principal = Depends(require_role("org_admin", "platform_admin")),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, int]:
+    organization = await session.scalar(select(Organization).where(Organization.id == principal.tenant_id))
+    if not organization:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found")
+    organization.quota_config = payload.model_dump()
+    await audit(session, principal.tenant_id, principal.user_id, "organization.quota_updated", "organization", organization.id, payload.model_dump())
+    await session.commit()
+    return organization.quota_config
+
+
+@router.get("/organization/permissions", response_model=PermissionMatrixView)
+async def permission_matrix(principal: Principal = Depends(get_principal)) -> PermissionMatrixView:
+    return PermissionMatrixView(roles={
+        "platform_admin": {"manage_members": True, "manage_data_sources": True, "manage_knowledge": True, "run_analysis": True, "view_audit": True},
+        "org_admin": {"manage_members": True, "manage_data_sources": True, "manage_knowledge": True, "run_analysis": True, "view_audit": True},
+        "analyst": {"manage_members": False, "manage_data_sources": False, "manage_knowledge": False, "run_analysis": True, "view_audit": False},
+        "viewer": {"manage_members": False, "manage_data_sources": False, "manage_knowledge": False, "run_analysis": False, "view_audit": False},
+    })
 
 
 @router.get("/members", response_model=list[MemberView])
