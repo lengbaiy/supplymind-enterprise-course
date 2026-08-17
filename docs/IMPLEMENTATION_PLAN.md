@@ -23,8 +23,8 @@ This file is the execution source of truth for the enterprise course case. Each 
 
 ## Next Small Tasks
 
-- [ ] Worker runtime verification: run a full Compose broker upload against PostgreSQL and Redis and inspect retry/failure state without duplicate chunks.
-  - Done when: Compose worker consumes an upload task end to end.
+- [x] Worker runtime verification: run a full Compose broker upload against PostgreSQL and Redis and inspect retry/failure state without duplicate chunks.
+  - Verify: Docker upload returned `queued`, Worker consumed `supplymind.documents.ingest`, task reached `completed`, attempts `1`, and one chunk was persisted.
 - [ ] Retrieval integration verification: mock the embedding provider in an API integration test and verify cited search results plus cross-tenant denial.
   - Done when: a search response returns text, score, document name, and chunk location under a mocked provider.
 - [ ] Report delivery: persist Markdown, export PDF in a worker, and authorize downloads by tenant and role.

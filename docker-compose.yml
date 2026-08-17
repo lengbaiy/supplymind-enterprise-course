@@ -62,7 +62,7 @@ services:
       minio: { condition: service_healthy }
   worker:
     build: ./backend
-    command: celery -A scripts.worker.celery_app worker --loglevel=INFO
+    command: celery -A scripts.worker.celery_app worker --loglevel=INFO --queues=analysis
     env_file: .env
     environment:
       SUPPLYMIND_DATABASE_URL: postgresql+psycopg://supplymind:supplymind@postgres:5432/supplymind
