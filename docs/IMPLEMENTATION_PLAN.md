@@ -12,11 +12,11 @@ This file is the execution source of truth for the enterprise course case. Each 
   - Verify: model-configuration test and existing regression suite.
 - [x] MCP tool registry: typed input/output contracts, role gates, timeout metadata, and side-effect declarations.
   - Verify: registry role/schema test.
+- [x] Knowledge storage: tenant-scoped knowledge bases, documents, and chunks with administrator CRUD/upload APIs.
+  - Verify: knowledge upload/list integration test and tenant filters.
 
 ## Next Small Tasks
 
-- [ ] Knowledge storage: add knowledge base, document, and chunk persistence with tenant-scoped APIs.
-  - Done when: an organization administrator can create a knowledge base and see only its own records.
 - [ ] Document ingestion: upload PDF/Markdown/TXT, extract text, split chunks, enqueue work, and persist task state.
   - Done when: a document reaches `completed` or an inspectable `failed` state.
 - [ ] Real embeddings and retrieval: call the configured OpenAI-compatible embedding endpoint and retrieve cited chunks.
