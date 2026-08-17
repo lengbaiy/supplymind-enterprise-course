@@ -12,7 +12,7 @@ from app.mcp.tools import register_default_tools
 from app.models import AgentStep, AnalysisRun, Conversation, DataSource, Report
 from app.schemas import AnalysisRequest, Principal
 from app.services.audit import audit
-from app.services.datasource import DataSourceError, execute_guarded_query
+from app.services.datasource import DataSourceError
 from app.services.llm import ModelConfigurationError, ModelResponseError, OpenAICompatibleClient
 from app.services.reports import render_markdown
 
@@ -49,11 +49,19 @@ class AnalysisService:
         yield self.event("queued", {"run_id": run.id})
         tools = ToolRegistry()
         register_default_tools(tools, session, principal)
-        for step, message in (("router", "Identifying analysis intent"), ("rag", "Retrieving manufacturing metric definitions"), ("schema", "Reading approved schema metadata")):
+        try:
+            schema_tool = await tools.call("schema.lookup", principal.role, {"data_source_id": source.id})
+            allowed_tables = [item["name"] for item in schema_tool.tables]
+            await audit(session, principal.tenant_id, principal.user_id, "mcp.schema.lookup", "data_source", source.id, {"table_count": len(allowed_tables)})
+        except (RuntimeError, OSError) as exc:
+            allowed_tables = source.allowed_tables
+            await audit(session, principal.tenant_id, principal.user_id, "mcp.schema.lookup_failed", "data_source", source.id, {"reason": str(exc)})
+        yield self.event("step_started", {"step": "schema", "tables": allowed_tables})
+        for step, message in (("router", "Identifying analysis intent"), ("rag", "Retrieving manufacturing metric definitions")):
             session.add(AgentStep(tenant_id=principal.tenant_id, analysis_run_id=run.id, name=step, status="completed", output={"message": message}, model_version=get_settings().chat_model or "", prompt_version="analysis-v1"))
             yield self.event("step_started", {"step": step, "message": message})
         try:
-            plan = await self.client.plan_sql(request.question, source.allowed_tables)
+            plan = await self.client.plan_sql(request.question, allowed_tables)
         except (ModelConfigurationError, ModelResponseError) as exc:
             run.status = "failed"
             await audit(session, principal.tenant_id, principal.user_id, "analysis.model_failed", "analysis_run", run.id, {"reason": str(exc)})
@@ -75,8 +83,10 @@ class AnalysisService:
             return
         session.add(AgentStep(tenant_id=principal.tenant_id, analysis_run_id=run.id, name="sql_guard", status="completed", output={"tables": guarded.tables}, prompt_version="sql-guard-v1"))
         try:
-            _, rows = await execute_guarded_query(source, guarded.sql)
-        except (DataSourceError, SQLAlchemyError) as exc:
+            query_tool = await tools.call("sql.query", principal.role, {"data_source_id": source.id, "sql": guarded.sql})
+            rows = query_tool.rows
+            await audit(session, principal.tenant_id, principal.user_id, "mcp.sql.query", "data_source", source.id, {"tables": query_tool.tables, "row_count": len(rows)})
+        except (DataSourceError, SQLAlchemyError, RuntimeError, OSError) as exc:
             run.status = "failed"
             await audit(session, principal.tenant_id, principal.user_id, "analysis.query_failed", "analysis_run", run.id, {"reason": str(exc)})
             await session.commit()
@@ -95,9 +105,11 @@ class AnalysisService:
         await session.flush()
         result["report_id"] = report.id
         session.add(AgentStep(tenant_id=principal.tenant_id, analysis_run_id=run.id, name="report", status="completed", output={"report_id": report.id}, prompt_version="report-v1"))
+        export_tool = await tools.call("report.export", principal.role, {"report_id": report.id, "format": "pdf"})
+        await audit(session, principal.tenant_id, principal.user_id, "mcp.report.export", "report", report.id, {"status": export_tool.status})
         await audit(session, principal.tenant_id, principal.user_id, "analysis.executed", "analysis_run", run.id, {"tables": guarded.tables})
         await session.commit()
-        yield self.event("tool_result", {"tables": guarded.tables, "row_count": len(result["rows"])})
+        yield self.event("tool_result", {"tool": "sql.query", "tables": guarded.tables, "row_count": len(result["rows"])})
         yield self.event("chart_ready", {"chart": result["chart"]})
         yield self.event("completed", {"run_id": run.id, "sql": guarded.sql, "result": result, "report_id": report.id})
 
