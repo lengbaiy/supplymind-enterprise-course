@@ -23,3 +23,27 @@ Open `http://localhost:5173`. The seeded organization is `demo-factory`; sign in
 Only source-database accounts with read-only permissions are supported. Every submitted SQL statement is parsed and checked before execution; only one `SELECT` or `WITH` statement may run. Credentials are encrypted at rest and never returned from the API.
 
 See `docs/THIRD_PARTY_NOTICES.md` for the upstream reference and license notice.
+# SupplyMind Enterprise Course Case
+
+## Docker development
+
+The default Compose stack runs the API, Celery worker, PostgreSQL/pgvector, Redis,
+MinIO, and the React frontend. Build and start it with:
+
+```powershell
+docker compose build api worker
+docker compose up -d
+```
+
+For day-to-day backend development, use the override with the source tree mounted
+into the containers and API hot reload enabled:
+
+```powershell
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build api worker
+docker compose -f docker-compose.yml -f docker-compose.dev.yml exec api pytest -q
+docker compose -f docker-compose.yml -f docker-compose.dev.yml exec api ruff check app scripts tests
+```
+
+The development override is intentionally explicit so the normal Compose command
+remains suitable for the course's reproducible baseline. API: `http://localhost:8000`,
+frontend: `http://localhost:5173`, MinIO console: `http://localhost:9001`.
