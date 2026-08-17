@@ -8,6 +8,7 @@ import httpx
 import jwt
 from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile, status
 from fastapi.responses import FileResponse, StreamingResponse
+from redis.asyncio import Redis
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -705,9 +706,35 @@ async def live() -> dict[str, str]:
 
 
 @router.get("/health/ready")
-async def ready(session: AsyncSession = Depends(get_session)) -> dict[str, str]:
-    await session.execute(select(Organization.id).limit(1))
-    return {"status": "ready"}
+async def ready(session: AsyncSession = Depends(get_session)) -> dict[str, object]:
+    settings = get_settings()
+    dependencies: dict[str, str] = {}
+    try:
+        await session.execute(select(Organization.id).limit(1))
+        dependencies["postgres"] = "ok"
+    except Exception:
+        dependencies["postgres"] = "error"
+
+    redis_client = Redis.from_url(
+        settings.redis_url,
+        socket_connect_timeout=2,
+        socket_timeout=2,
+        health_check_interval=15,
+    )
+    try:
+        await redis_client.ping()
+        dependencies["redis"] = "ok"
+    except Exception:
+        dependencies["redis"] = "error"
+    finally:
+        await redis_client.aclose()
+
+    if any(value != "ok" for value in dependencies.values()):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"status": "not_ready", "dependencies": dependencies},
+        )
+    return {"status": "ready", "dependencies": dependencies}
 
 
 @router.get("/metrics")
