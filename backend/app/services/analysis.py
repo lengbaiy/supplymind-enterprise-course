@@ -9,7 +9,7 @@ from app.core.config import get_settings
 from app.core.sql_guard import SQLGuardError, validate_read_only_sql
 from app.mcp.registry import ToolRegistry
 from app.mcp.tools import register_default_tools
-from app.models import AgentStep, AnalysisRun, Conversation, DataSource, Report
+from app.models import AgentStep, AnalysisRun, Conversation, DataSource, KnowledgeBase, Report
 from app.schemas import AnalysisRequest, Principal
 from app.services.audit import audit
 from app.services.datasource import DataSourceError
@@ -32,6 +32,14 @@ class AnalysisService:
         if not source:
             yield self.event("failed", {"message": "Data source not found"})
             return
+        if request.knowledge_base_id:
+            knowledge_base = await session.scalar(select(KnowledgeBase).where(
+                KnowledgeBase.id == request.knowledge_base_id,
+                KnowledgeBase.tenant_id == principal.tenant_id,
+            ))
+            if not knowledge_base or knowledge_base.is_archived:
+                yield self.event("failed", {"message": "Knowledge base is unavailable for new analysis"})
+                return
         conversation = Conversation(
             tenant_id=principal.tenant_id, title=request.question[:80], created_by=principal.user_id
         )
