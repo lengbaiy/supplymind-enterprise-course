@@ -44,3 +44,25 @@ def test_chunker_handles_overlap() -> None:
     chunks = list(chunk_text("a" * 2500, size=1000, overlap=100))
     assert len(chunks) == 3
     assert chunks[1][2]["start"] == 900
+
+
+def test_duplicate_upload_is_idempotent(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("SUPPLYMIND_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path / 'duplicate.db'}")
+    monkeypatch.setenv("SUPPLYMIND_JWT_SECRET", "test-secret-that-is-long-enough-for-tests")
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
+    from app.main import app
+
+    with TestClient(app) as client:
+        login = client.post("/api/v1/auth/login", json={
+            "email": "admin@demo.local", "password": "ChangeMe123!", "organization_slug": "demo-factory"
+        })
+        headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+        knowledge_base = client.post("/api/v1/knowledge-bases", headers=headers, json={"name": "幂等测试库"}).json()
+        upload_url = f"/api/v1/knowledge-bases/{knowledge_base['id']}/documents"
+        first = client.post(upload_url, headers=headers, files={"file": ("same.txt", b"same content", "text/plain")})
+        second = client.post(upload_url, headers=headers, files={"file": ("same.txt", b"same content", "text/plain")})
+        assert first.status_code == second.status_code == 201
+        assert first.json()["id"] == second.json()["id"]
+        assert client.get(f"/api/v1/knowledge-bases/{knowledge_base['id']}/documents", headers=headers).json().__len__() == 1

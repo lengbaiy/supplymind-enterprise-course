@@ -21,6 +21,7 @@ services:
     environment:
       SUPPLYMIND_DATABASE_URL: postgresql+psycopg://supplymind:supplymind@postgres:5432/supplymind
       SUPPLYMIND_REDIS_URL: redis://redis:6379/0
+      SUPPLYMIND_INGESTION_MODE: broker
     ports: ["8000:8000"]
     depends_on:
       postgres: { condition: service_healthy }
@@ -32,6 +33,7 @@ services:
     environment:
       SUPPLYMIND_DATABASE_URL: postgresql+psycopg://supplymind:supplymind@postgres:5432/supplymind
       SUPPLYMIND_REDIS_URL: redis://redis:6379/0
+      SUPPLYMIND_INGESTION_MODE: broker
     depends_on: [postgres, redis]
   frontend:
     build: ./frontend

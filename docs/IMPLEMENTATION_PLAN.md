@@ -18,11 +18,13 @@ This file is the execution source of truth for the enterprise course case. Each 
   - Verify: upload integration test asserts completed task state; worker task is importable and bounded to tenant-owned records.
 - [x] Embedding integration boundary: OpenAI-compatible `/embeddings` client, optional ingestion-time vector persistence, cosine ranking service, and tenant-scoped search endpoint with cited document/chunk locations.
   - Verify: embedding fail-closed test and cosine ranking unit test; live provider verification remains environment-dependent.
+- [x] Ingestion dispatch boundary: eager local execution, broker-mode Celery dispatch for Compose, persisted Celery task ID, and content-hash idempotent upload response.
+  - Verify: duplicate upload integration test, 15 backend tests, Ruff, and Compose configuration validation.
 
 ## Next Small Tasks
 
-- [ ] Worker dispatch hardening: route document tasks through Celery by default in deployed environments while retaining eager local development mode.
-  - Done when: Compose worker consumes an upload task and API can inspect retry/failure state without duplicate chunks.
+- [ ] Worker runtime verification: run a full Compose broker upload against PostgreSQL and Redis and inspect retry/failure state without duplicate chunks.
+  - Done when: Compose worker consumes an upload task end to end.
 - [ ] Retrieval integration verification: mock the embedding provider in an API integration test and verify cited search results plus cross-tenant denial.
   - Done when: a search response returns text, score, document name, and chunk location under a mocked provider.
 - [ ] Report delivery: persist Markdown, export PDF in a worker, and authorize downloads by tenant and role.

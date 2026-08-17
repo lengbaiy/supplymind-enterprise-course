@@ -139,6 +139,13 @@ async def upload_document(
     except KnowledgeError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
     digest = sha256(payload)
+    task_key = f"{principal.tenant_id}:{digest}"
+    existing_task = await session.scalar(select(IngestionTask).where(IngestionTask.task_key == task_key))
+    if existing_task:
+        existing_document = await session.scalar(select(Document).where(Document.id == existing_task.document_id))
+        if existing_document:
+            chunk_count = await session.scalar(select(func.count(Chunk.id)).where(Chunk.document_id == existing_document.id)) or 0
+            return DocumentView.model_validate({**existing_document.__dict__, "chunk_count": chunk_count, "ingestion_task_id": existing_task.id})
     storage_dir = Path(get_settings().document_directory)
     storage_dir.mkdir(parents=True, exist_ok=True)
     source_path = storage_dir / digest
@@ -155,10 +162,17 @@ async def upload_document(
     )
     session.add(document)
     await session.flush()
-    task = IngestionTask(tenant_id=principal.tenant_id, document_id=document.id, task_key=f"{principal.tenant_id}:{digest}")
+    task = IngestionTask(tenant_id=principal.tenant_id, document_id=document.id, task_key=task_key)
     session.add(task)
     await session.flush()
-    await process_ingestion(session, task, document)
+    if get_settings().ingestion_mode == "broker":
+        from scripts.worker import celery_app
+
+        dispatched = celery_app.send_task("supplymind.documents.ingest", args=[task.id])
+        task.celery_task_id = dispatched.id
+        await audit(session, principal.tenant_id, principal.user_id, "document.ingestion_queued", "document", document.id, {"task_id": task.id})
+    else:
+        await process_ingestion(session, task, document)
     await audit(session, principal.tenant_id, principal.user_id, "document.uploaded", "document", document.id, {"filename": document.filename})
     await session.commit()
     await session.refresh(document)
