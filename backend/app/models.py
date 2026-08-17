@@ -111,6 +111,9 @@ class AgentStep(TenantModel, Base):
     status: Mapped[str] = mapped_column(String(32))
     input_summary: Mapped[str] = mapped_column(Text, default="")
     output: Mapped[dict] = mapped_column(JSON, default=dict)
+    model_version: Mapped[str] = mapped_column(String(64), default="")
+    prompt_version: Mapped[str] = mapped_column(String(64), default="")
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     elapsed_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

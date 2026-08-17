@@ -26,6 +26,8 @@ This file is the execution source of truth for the enterprise course case. Each 
   - Verify: Markdown renderer unit test and full backend regression suite.
 - [x] Alembic baseline and PostgreSQL tenant isolation: initial metadata migration, RLS policies for tenant tables, and request-scoped tenant context.
   - Verify: Docker `alembic upgrade head`, PostgreSQL `rowsecurity = true`, 18 backend tests, and Ruff.
+- [x] Analysis trace foundation: eight named Agent stages, model/prompt version fields, automatic Markdown report creation, and SSE report identifiers.
+  - Verify: Docker regression suite, migration `0002_agent_step_trace`, and Ruff.
 
 ## Next Small Tasks
 
