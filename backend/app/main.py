@@ -42,9 +42,11 @@ async def seed_demo_data() -> None:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
-    await seed_demo_data()
+    if settings.auto_create_schema or settings.is_development:
+        async with engine.begin() as connection:
+            await connection.run_sync(Base.metadata.create_all)
+    if settings.is_development:
+        await seed_demo_data()
     yield
     await engine.dispose()
 

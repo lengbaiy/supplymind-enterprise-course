@@ -33,6 +33,9 @@ This file is the execution source of truth for the enterprise course case. Each 
 
 ## Next Small Tasks
 
+- [ ] Framework hardening: production startup uses Alembic only; domain module boundaries are explicit.
+  - Done when: development retains seeded Compose startup, production skips `create_all` and demo seeding, and new code follows `backend/app/modules` boundaries.
+
 - [x] Worker runtime verification: run a full Compose broker upload against PostgreSQL and Redis and inspect retry/failure state without duplicate chunks.
   - Verify: Docker upload returned `queued`, Worker consumed `supplymind.documents.ingest`, task reached `completed`, attempts `1`, and one chunk was persisted.
 - [x] Report delivery: persist Markdown, export PDF in a worker, record checksum/status, and authorize downloads by tenant and role.

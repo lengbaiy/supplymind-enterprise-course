@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_prefix="SUPPLYMIND_", extra="ignore")
 
     env: str = "development"
+    auto_create_schema: bool = False
     database_url: str = "sqlite+aiosqlite:///./supplymind.db"
     redis_url: str = "redis://localhost:6379/0"
     jwt_secret: str = "development-only-change-me-please-change-me"
@@ -43,6 +44,10 @@ class Settings(BaseSettings):
     @property
     def datasource_host_list(self) -> set[str]:
         return {value.strip().lower() for value in self.datasource_allowed_hosts.split(",") if value.strip()}
+
+    @property
+    def is_development(self) -> bool:
+        return self.env.lower() in {"development", "dev", "test"}
 
 
 @lru_cache
