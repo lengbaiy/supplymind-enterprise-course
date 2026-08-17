@@ -8,11 +8,22 @@ from sqlalchemy import select
 from app.core.config import get_settings
 from app.db import SessionLocal
 from app.models import Document, IngestionTask, Report, ReportExport
+from app.modules.dashboards.service import refresh_supply_chain_dashboard
 from app.services.ingestion import process_ingestion
 from app.services.reports import render_pdf
 
 celery_app = Celery("supplymind", broker=get_settings().redis_url, backend=get_settings().redis_url)
 celery_app.conf.task_routes = {"supplymind.*": {"queue": "analysis"}}
+
+
+@celery_app.task(bind=True, name="supplymind.dashboards.refresh", autoretry_for=(Exception,), retry_backoff=True, max_retries=3)
+def refresh_dashboard(self, tenant_id: str) -> str:
+    async def run() -> None:
+        async with SessionLocal() as session:
+            await refresh_supply_chain_dashboard(session, tenant_id)
+
+    asyncio.run(run())
+    return tenant_id
 
 
 @celery_app.task(bind=True, name="supplymind.documents.ingest", autoretry_for=(Exception,), retry_backoff=True, max_retries=3)

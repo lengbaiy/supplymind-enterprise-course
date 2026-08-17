@@ -91,3 +91,28 @@ async def get_supply_chain_dashboard(session: AsyncSession, tenant_id: str) -> d
         "refresh_interval_seconds": dashboard.refresh_interval_seconds,
         **payload,
     }
+
+
+async def refresh_supply_chain_dashboard(session: AsyncSession, tenant_id: str) -> Dashboard:
+    dashboard = await get_dashboard(session, tenant_id, "supply-chain")
+    now = datetime.now(UTC)
+    if not dashboard:
+        dashboard = await save_dashboard(
+            session,
+            Dashboard(
+                tenant_id=tenant_id,
+                name="供应链运营大屏",
+                slug="supply-chain",
+                refresh_interval_seconds=300,
+                cached_payload=DEFAULT_PAYLOAD,
+            ),
+        )
+    dashboard.cached_payload = DEFAULT_PAYLOAD
+    dashboard.cached_at = now
+    await session.commit()
+    await _cache_payload(
+        f"supplymind:dashboard:{tenant_id}:{dashboard.slug}",
+        dashboard.cached_payload,
+        dashboard.refresh_interval_seconds,
+    )
+    return dashboard
