@@ -1,3 +1,4 @@
+from datetime import UTC, datetime, timedelta
 from hashlib import sha256 as sha256_digest
 from pathlib import Path
 
@@ -7,7 +8,13 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
-from app.core.security import create_access_token, encrypt_secret, verify_password
+from app.core.security import (
+    create_access_token,
+    create_refresh_token,
+    encrypt_secret,
+    hash_refresh_token,
+    verify_password,
+)
 from app.db import get_session
 from app.dependencies import get_principal, require_role
 from app.models import (
@@ -19,6 +26,7 @@ from app.models import (
     KnowledgeBase,
     Membership,
     Organization,
+    RefreshToken,
     Report,
     ReportExport,
     User,
@@ -34,8 +42,11 @@ from app.schemas import (
     KnowledgeBaseView,
     KnowledgeSearchRequest,
     LoginRequest,
+    MemberRoleUpdate,
+    MemberView,
     Principal,
     QueryRequest,
+    RefreshRequest,
     ReportCreate,
     ReportExportView,
     ReportView,
@@ -75,19 +86,126 @@ async def login(payload: LoginRequest, session: AsyncSession = Depends(get_sessi
     user = await session.scalar(select(User).where(User.email == payload.email.lower()))
     if not organization or not user or not verify_password(payload.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
-    membership = await session.scalar(
-        select(Membership).where(Membership.organization_id == organization.id, Membership.user_id == user.id)
-    )
+    membership = await session.scalar(select(Membership).where(
+        Membership.organization_id == organization.id, Membership.user_id == user.id, Membership.is_active.is_(True)
+    ))
     if not membership:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization membership required")
     await audit(session, organization.id, user.id, "auth.login", "user", user.id)
+    raw_refresh = create_refresh_token()
+    session.add(RefreshToken(
+        token_hash=hash_refresh_token(raw_refresh), user_id=user.id, organization_id=organization.id,
+        expires_at=datetime.now(UTC) + timedelta(days=get_settings().refresh_token_days),
+    ))
     await session.commit()
-    return TokenResponse(access_token=create_access_token(user.id, organization.id, membership.role))
+    return TokenResponse(
+        access_token=create_access_token(user.id, organization.id, membership.role), refresh_token=raw_refresh
+    )
+
+
+@router.post("/auth/refresh", response_model=TokenResponse)
+async def refresh(payload: RefreshRequest, session: AsyncSession = Depends(get_session)) -> TokenResponse:
+    stored = await session.scalar(select(RefreshToken).where(
+        RefreshToken.token_hash == hash_refresh_token(payload.refresh_token)
+    ))
+    now = datetime.now(UTC)
+    expires_at = stored.expires_at.replace(tzinfo=UTC) if stored and stored.expires_at.tzinfo is None else (stored.expires_at if stored else now)
+    if not stored or stored.revoked_at or expires_at <= now:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
+    membership = await session.scalar(select(Membership).where(
+        Membership.organization_id == stored.organization_id, Membership.user_id == stored.user_id,
+        Membership.is_active.is_(True),
+    ))
+    if not membership:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization access denied")
+    replacement = create_refresh_token()
+    replacement_row = RefreshToken(
+        token_hash=hash_refresh_token(replacement), user_id=stored.user_id, organization_id=stored.organization_id,
+        expires_at=now + timedelta(days=get_settings().refresh_token_days),
+    )
+    session.add(replacement_row)
+    stored.revoked_at = now
+    stored.replaced_by = replacement_row.id
+    await audit(session, stored.organization_id, stored.user_id, "auth.refresh", "refresh_token", stored.id)
+    await session.commit()
+    return TokenResponse(
+        access_token=create_access_token(stored.user_id, stored.organization_id, membership.role),
+        refresh_token=replacement,
+    )
+
+
+@router.post("/auth/logout", status_code=status.HTTP_204_NO_CONTENT)
+async def logout(payload: RefreshRequest, session: AsyncSession = Depends(get_session)) -> Response:
+    stored = await session.scalar(select(RefreshToken).where(
+        RefreshToken.token_hash == hash_refresh_token(payload.refresh_token)
+    ))
+    if stored and not stored.revoked_at:
+        stored.revoked_at = datetime.now(UTC)
+        await audit(session, stored.organization_id, stored.user_id, "auth.logout", "refresh_token", stored.id)
+        await session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/me")
 async def me(principal: Principal = Depends(get_principal)) -> Principal:
     return principal
+
+
+@router.get("/members", response_model=list[MemberView])
+async def list_members(
+    principal: Principal = Depends(require_role("org_admin", "platform_admin")),
+    session: AsyncSession = Depends(get_session),
+) -> list[MemberView]:
+    rows = await session.execute(
+        select(Membership, User).join(User, User.id == Membership.user_id)
+        .where(Membership.organization_id == principal.tenant_id).order_by(User.email)
+    )
+    return [MemberView(user_id=m.user_id, email=u.email, display_name=u.display_name,
+                       role=m.role, is_active=m.is_active) for m, u in rows]
+
+
+@router.patch("/members/{user_id}", response_model=MemberView)
+async def update_member(
+    user_id: str,
+    payload: MemberRoleUpdate,
+    principal: Principal = Depends(require_role("org_admin", "platform_admin")),
+    session: AsyncSession = Depends(get_session),
+) -> MemberView:
+    membership = await session.scalar(select(Membership).where(
+        Membership.organization_id == principal.tenant_id, Membership.user_id == user_id
+    ))
+    user = await session.scalar(select(User).where(User.id == user_id))
+    if not membership or not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Member not found")
+    if user_id == principal.user_id and payload.role != "org_admin" and principal.role == "org_admin":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot remove your own admin role")
+    membership.role = payload.role
+    membership.is_active = True
+    await audit(session, principal.tenant_id, principal.user_id, "member.role_updated", "membership", membership.id,
+                {"user_id": user_id, "role": payload.role})
+    await session.commit()
+    return MemberView(user_id=user.id, email=user.email, display_name=user.display_name,
+                      role=membership.role, is_active=membership.is_active)
+
+
+@router.delete("/members/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def disable_member(
+    user_id: str,
+    principal: Principal = Depends(require_role("org_admin", "platform_admin")),
+    session: AsyncSession = Depends(get_session),
+) -> Response:
+    membership = await session.scalar(select(Membership).where(
+        Membership.organization_id == principal.tenant_id, Membership.user_id == user_id
+    ))
+    if not membership:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Member not found")
+    if user_id == principal.user_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot disable yourself")
+    membership.is_active = False
+    await audit(session, principal.tenant_id, principal.user_id, "member.disabled", "membership", membership.id,
+                {"user_id": user_id})
+    await session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/data-sources", response_model=list[DataSourceView])

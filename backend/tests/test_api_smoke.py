@@ -27,3 +27,12 @@ def test_seeded_user_can_log_in_and_read_dashboard(monkeypatch, tmp_path: Path) 
         )
         assert dashboard.status_code == 200
         assert len(dashboard.json()["cards"]) == 4
+        refresh_token = response.json()["refresh_token"]
+        rotated = client.post("/api/v1/auth/refresh", json={"refresh_token": refresh_token})
+        assert rotated.status_code == 200
+        assert rotated.json()["refresh_token"] != refresh_token
+        assert client.post("/api/v1/auth/refresh", json={"refresh_token": refresh_token}).status_code == 401
+        members = client.get("/api/v1/members", headers={"Authorization": f"Bearer {token}"})
+        assert members.status_code == 200
+        assert members.json()[0]["role"] == "org_admin"
+        assert client.post("/api/v1/auth/logout", json={"refresh_token": rotated.json()["refresh_token"]}).status_code == 204

@@ -1,3 +1,5 @@
+import hashlib
+import secrets
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -28,6 +30,14 @@ def create_access_token(subject: str, organization_id: str, role: str) -> str:
         "exp": datetime.now(UTC) + timedelta(hours=8),
     }
     return jwt.encode(payload, settings.jwt_secret, algorithm="HS256")
+
+
+def create_refresh_token() -> str:
+    return secrets.token_urlsafe(48)
+
+
+def hash_refresh_token(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()
 
 
 def decode_access_token(token: str) -> dict[str, Any]:

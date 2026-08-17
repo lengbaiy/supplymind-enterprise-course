@@ -14,7 +14,24 @@ class LoginRequest(BaseModel):
 
 class TokenResponse(BaseModel):
     access_token: str
+    refresh_token: str | None = None
     token_type: str = "bearer"
+
+
+class RefreshRequest(BaseModel):
+    refresh_token: str = Field(min_length=20)
+
+
+class MemberView(BaseModel):
+    user_id: str
+    email: str
+    display_name: str
+    role: Role
+    is_active: bool
+
+
+class MemberRoleUpdate(BaseModel):
+    role: Role
 
 
 class Principal(BaseModel):

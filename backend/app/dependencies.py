@@ -22,7 +22,7 @@ async def get_principal(
     claims = decode_access_token(credentials.credentials)
     membership = await session.scalar(
         select(Membership).where(
-            Membership.user_id == claims["sub"], Membership.organization_id == claims["org"]
+            Membership.user_id == claims["sub"], Membership.organization_id == claims["org"], Membership.is_active.is_(True)
         )
     )
     if not membership:
