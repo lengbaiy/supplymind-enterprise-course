@@ -6,7 +6,7 @@ from urllib.parse import urlencode
 
 import httpx
 import jwt
-from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile, status
 from fastapi.responses import FileResponse, StreamingResponse
 from redis.asyncio import Redis
 from sqlalchemy import func, select
@@ -26,7 +26,6 @@ from app.db import get_session, set_tenant_context
 from app.dependencies import get_principal, require_role
 from app.models import (
     AnalysisRun,
-    AuditEvent,
     Chunk,
     DataSource,
     Document,
@@ -43,7 +42,6 @@ from app.models import (
 from app.schemas import (
     AnalysisRequest,
     AnalysisView,
-    AuditEventView,
     DataSourceCreate,
     DataSourceView,
     DocumentView,
@@ -313,21 +311,6 @@ async def disable_member(
     await audit(session, principal.tenant_id, principal.user_id, "member.disabled", "membership", membership.id,
                 {"user_id": user_id})
     await session.commit()
-
-
-@router.get("/audit", response_model=list[AuditEventView])
-async def list_audit_events(
-    limit: int = Query(default=100, ge=1, le=500),
-    session: AsyncSession = Depends(get_session),
-    principal: Principal = Depends(require_role("platform_admin", "org_admin")),
-) -> list[AuditEvent]:
-    result = await session.scalars(
-        select(AuditEvent)
-        .where(AuditEvent.tenant_id == principal.tenant_id)
-        .order_by(AuditEvent.occurred_at.desc())
-        .limit(limit)
-    )
-    return list(result)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

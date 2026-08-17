@@ -10,6 +10,7 @@ from app.core.config import get_settings
 from app.core.security import encrypt_secret, hash_password
 from app.db import SessionLocal, engine, set_tenant_context
 from app.models import Base, DataSource, Membership, Organization, User
+from app.modules.audit.router import router as audit_router
 from app.observability import HTTP_REQUEST_DURATION, HTTP_REQUESTS
 
 
@@ -73,3 +74,4 @@ async def metrics_middleware(request, call_next):
 
 
 app.include_router(router)
+app.include_router(audit_router)
