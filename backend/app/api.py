@@ -21,7 +21,7 @@ from app.core.security import (
     hash_refresh_token,
     verify_password,
 )
-from app.db import get_session
+from app.db import get_session, set_tenant_context
 from app.dependencies import get_principal, require_role
 from app.models import (
     AnalysisRun,
@@ -98,6 +98,7 @@ async def login(payload: LoginRequest, session: AsyncSession = Depends(get_sessi
     ))
     if not membership:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization membership required")
+    await set_tenant_context(session, organization.id)
     await audit(session, organization.id, user.id, "auth.login", "user", user.id)
     raw_refresh = create_refresh_token()
     session.add(RefreshToken(
@@ -133,6 +134,7 @@ async def refresh(payload: RefreshRequest, session: AsyncSession = Depends(get_s
     session.add(replacement_row)
     stored.revoked_at = now
     stored.replaced_by = replacement_row.id
+    await set_tenant_context(session, stored.organization_id)
     await audit(session, stored.organization_id, stored.user_id, "auth.refresh", "refresh_token", stored.id)
     await session.commit()
     return TokenResponse(
@@ -148,6 +150,7 @@ async def logout(payload: RefreshRequest, session: AsyncSession = Depends(get_se
     ))
     if stored and not stored.revoked_at:
         stored.revoked_at = datetime.now(UTC)
+        await set_tenant_context(session, stored.organization_id)
         await audit(session, stored.organization_id, stored.user_id, "auth.logout", "refresh_token", stored.id)
         await session.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
@@ -242,6 +245,7 @@ async def oidc_callback(code: str, state: str, session: AsyncSession = Depends(g
         expires_at=now + timedelta(days=get_settings().refresh_token_days),
     ))
     login_state.consumed_at = now
+    await set_tenant_context(session, login_state.organization_id)
     await audit(session, login_state.organization_id, user.id, "auth.oidc_login", "user", user.id)
     await session.commit()
     return TokenResponse(access_token=create_access_token(user.id, login_state.organization_id, membership.role), refresh_token=raw_refresh)

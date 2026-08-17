@@ -24,6 +24,8 @@ This file is the execution source of truth for the enterprise course case. Each 
   - Verify: search integration test returns score/document/location; unknown tenant resource returns `404`.
 - [x] Report Markdown foundation: tenant-scoped report model, Markdown renderer with SQL/rows/citations, and report CRUD endpoints with role gates.
   - Verify: Markdown renderer unit test and full backend regression suite.
+- [x] Alembic baseline and PostgreSQL tenant isolation: initial metadata migration, RLS policies for tenant tables, and request-scoped tenant context.
+  - Verify: Docker `alembic upgrade head`, PostgreSQL `rowsecurity = true`, 18 backend tests, and Ruff.
 
 ## Next Small Tasks
 

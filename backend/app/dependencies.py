@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import decode_access_token
-from app.db import get_session
+from app.db import get_session, set_tenant_context
 from app.models import Membership
 from app.schemas import Principal
 
@@ -27,6 +27,7 @@ async def get_principal(
     )
     if not membership:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization access denied")
+    await set_tenant_context(session, claims["org"])
     return Principal(user_id=claims["sub"], tenant_id=claims["org"], role=membership.role)  # type: ignore[arg-type]
 
 
