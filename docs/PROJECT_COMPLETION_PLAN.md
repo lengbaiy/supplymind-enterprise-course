@@ -221,6 +221,6 @@
 - 更新 `docs/IMPLEMENTATION_PLAN.md` 和本计划的状态。
 - 单独 commit，提交信息包含切块编号，例如 `feat: P02 complete knowledge lifecycle`。
 
-## 13. 当前优先级
+## 13. 当前优先级（已更新）
 
-下一步从 P01 开始：先完成项目管理页面和组织配额/资源摘要接口，再进入 P02 知识库详情与任务重试。不要继续在单一 `frontend/src/main.tsx` 中堆叠页面；每完成一个切块，就把页面迁移到对应 `frontend/src/features/<domain>`，保留兼容入口直到浏览器验收通过。
+P01-P07 已完成基础切块，P08 已完成基础前端迁移但浏览器 E2E、课程材料和最终交付仍待收口。后续不再从 P01 重新开始，统一以 `docs/REQUIREMENTS_HANDOFF.md` 的 F01-F10 为执行基线：先完成 F01 成员管理、F03 数据源真实元数据、F04 知识库管理闭环，再进入 F05-F10。不要继续在单一 `frontend/src/main.tsx` 中堆叠页面；每完成一个功能模块，就把页面和服务迁移到对应 `frontend/src/features/<domain>`，保留兼容入口直到浏览器验收通过。
