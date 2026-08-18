@@ -78,6 +78,18 @@ class DataSource(TenantModel, Base):
     encrypted_password: Mapped[str] = mapped_column(Text)
     allowed_tables: Mapped[list[str]] = mapped_column(JSON, default=list)
     tls_required: Mapped[bool] = mapped_column(Boolean, default=False)
+    status: Mapped[str] = mapped_column(String(24), default="active")
+    last_tested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    disabled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class SchemaSnapshot(TenantModel, Base):
+    __tablename__ = "schema_snapshots"
+    data_source_id: Mapped[str] = mapped_column(ForeignKey("data_sources.id"), index=True)
+    tables: Mapped[list] = mapped_column(JSON, default=list)
+    table_count: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

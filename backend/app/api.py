@@ -25,6 +25,7 @@ from app.core.security import (
 from app.db import get_session, set_tenant_context
 from app.dependencies import get_principal, require_role
 from app.models import (
+    AgentStep,
     AnalysisRun,
     Chunk,
     Dashboard,
@@ -38,11 +39,13 @@ from app.models import (
     RefreshToken,
     Report,
     ReportExport,
+    SchemaSnapshot,
     User,
 )
 from app.modules.analysis.service import AnalysisService
 from app.modules.datasources.service import (
     DataSourceError,
+    ensure_source_enabled,
     execute_guarded_query,
     get_tenant_source,
     synchronize_schema,
@@ -51,6 +54,7 @@ from app.modules.datasources.service import (
 from app.modules.knowledge.service import get_tenant_knowledge_base, search_tenant_knowledge
 from app.modules.reports.service import get_tenant_report, render_markdown, render_pdf
 from app.schemas import (
+    AgentStepView,
     AnalysisRequest,
     AnalysisView,
     DataSourceCreate,
@@ -73,6 +77,7 @@ from app.schemas import (
     ReportCreate,
     ReportExportView,
     ReportView,
+    SchemaSnapshotView,
     TokenResponse,
 )
 from app.services.audit import audit
@@ -707,6 +712,12 @@ async def report_pdf_status(
     return export
 
 
+@router.get("/reports/{report_id}/exports", response_model=list[ReportExportView])
+async def list_report_exports(report_id: str, principal: Principal = Depends(get_principal), session: AsyncSession = Depends(get_session)) -> list[ReportExport]:
+    await get_tenant_report(session, report_id, principal.tenant_id)
+    return list(await session.scalars(select(ReportExport).where(ReportExport.report_id == report_id, ReportExport.tenant_id == principal.tenant_id).order_by(ReportExport.created_at.desc())))
+
+
 @router.get("/reports/{report_id}/exports/pdf/download")
 async def download_report_pdf(
     report_id: str,
@@ -775,6 +786,7 @@ async def test_data_source(
 ) -> dict:
     try:
         source = await get_tenant_source(session, source_id, principal.tenant_id)
+        ensure_source_enabled(source)
     except DataSourceError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     try:
@@ -783,6 +795,8 @@ async def test_data_source(
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Data source connection failed") from exc
+    source.status = "active"
+    source.last_tested_at = datetime.now(UTC)
     await audit(session, principal.tenant_id, principal.user_id, "datasource.tested", "data_source", source.id)
     await session.commit()
     return result
@@ -796,6 +810,7 @@ async def sync_data_source(
 ) -> dict:
     try:
         source = await get_tenant_source(session, source_id, principal.tenant_id)
+        ensure_source_enabled(source)
     except DataSourceError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     try:
@@ -804,9 +819,57 @@ async def sync_data_source(
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Schema synchronization failed") from exc
-    await audit(session, principal.tenant_id, principal.user_id, "datasource.schema_synced", "data_source", source.id, {"table_count": len(schema.tables)})
+    source.last_synced_at = datetime.now(UTC)
+    snapshot = SchemaSnapshot(tenant_id=principal.tenant_id, data_source_id=source.id, tables=schema.tables, table_count=len(schema.tables))
+    session.add(snapshot)
+    await audit(session, principal.tenant_id, principal.user_id, "datasource.schema_synced", "data_source", source.id, {"table_count": len(schema.tables), "snapshot_id": snapshot.id})
     await session.commit()
-    return {"tables": schema.tables}
+    return {"tables": schema.tables, "snapshot_id": snapshot.id, "synced_at": source.last_synced_at}
+
+
+@router.get("/data-sources/{source_id}", response_model=DataSourceView)
+async def get_data_source(source_id: str, principal: Principal = Depends(get_principal), session: AsyncSession = Depends(get_session)) -> DataSource:
+    try:
+        return await get_tenant_source(session, source_id, principal.tenant_id)
+    except DataSourceError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.get("/data-sources/{source_id}/schema", response_model=SchemaSnapshotView | None)
+async def get_data_source_schema(source_id: str, principal: Principal = Depends(get_principal), session: AsyncSession = Depends(get_session)) -> SchemaSnapshot | None:
+    try:
+        source = await get_tenant_source(session, source_id, principal.tenant_id)
+    except DataSourceError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return await session.scalar(select(SchemaSnapshot).where(SchemaSnapshot.data_source_id == source.id, SchemaSnapshot.tenant_id == principal.tenant_id).order_by(SchemaSnapshot.created_at.desc()))
+
+
+@router.post("/data-sources/{source_id}/disable", response_model=DataSourceView)
+async def disable_data_source(source_id: str, principal: Principal = Depends(require_role("org_admin", "platform_admin")), session: AsyncSession = Depends(get_session)) -> DataSource:
+    try:
+        source = await get_tenant_source(session, source_id, principal.tenant_id)
+    except DataSourceError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    source.status = "disabled" if source.status == "active" else "active"
+    source.disabled_at = datetime.now(UTC) if source.status == "disabled" else None
+    await audit(session, principal.tenant_id, principal.user_id, "datasource.disabled" if source.status == "disabled" else "datasource.enabled", "data_source", source.id)
+    await session.commit()
+    return source
+
+
+@router.delete("/data-sources/{source_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_data_source(source_id: str, principal: Principal = Depends(require_role("org_admin", "platform_admin")), session: AsyncSession = Depends(get_session)) -> Response:
+    try:
+        source = await get_tenant_source(session, source_id, principal.tenant_id)
+    except DataSourceError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    referenced = await session.scalar(select(func.count(AnalysisRun.id)).where(AnalysisRun.data_source_id == source.id, AnalysisRun.tenant_id == principal.tenant_id)) or 0
+    if referenced:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Data source is referenced by analysis runs; disable it instead")
+    await audit(session, principal.tenant_id, principal.user_id, "datasource.deleted", "data_source", source.id)
+    await session.delete(source)
+    await session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("/data-sources/{source_id}/query")
@@ -818,6 +881,7 @@ async def query_data_source(
 ) -> dict:
     try:
         source = await get_tenant_source(session, source_id, principal.tenant_id)
+        ensure_source_enabled(source)
     except DataSourceError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     try:
@@ -848,6 +912,22 @@ async def list_analyses(
         select(AnalysisRun).where(AnalysisRun.tenant_id == principal.tenant_id).order_by(AnalysisRun.created_at.desc())
     )
     return list(result)
+
+
+@router.get("/analyses/{analysis_id}", response_model=AnalysisView)
+async def get_analysis(analysis_id: str, principal: Principal = Depends(get_principal), session: AsyncSession = Depends(get_session)) -> AnalysisRun:
+    run = await session.scalar(select(AnalysisRun).where(AnalysisRun.id == analysis_id, AnalysisRun.tenant_id == principal.tenant_id))
+    if not run:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Analysis run not found")
+    return run
+
+
+@router.get("/analyses/{analysis_id}/steps", response_model=list[AgentStepView])
+async def get_analysis_steps(analysis_id: str, principal: Principal = Depends(get_principal), session: AsyncSession = Depends(get_session)) -> list:
+    run = await session.scalar(select(AnalysisRun).where(AnalysisRun.id == analysis_id, AnalysisRun.tenant_id == principal.tenant_id))
+    if not run:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Analysis run not found")
+    return list(await session.scalars(select(AgentStep).where(AgentStep.analysis_run_id == run.id, AgentStep.tenant_id == principal.tenant_id).order_by(AgentStep.created_at)))
 
 
 @router.get("/health/live")

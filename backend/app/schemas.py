@@ -86,6 +86,17 @@ class DataSourceView(BaseModel):
     database_name: str
     allowed_tables: list[str]
     tls_required: bool
+    status: str = "active"
+    last_tested_at: datetime | None = None
+    last_synced_at: datetime | None = None
+    created_at: datetime
+
+
+class SchemaSnapshotView(BaseModel):
+    id: str
+    data_source_id: str
+    tables: list
+    table_count: int
     created_at: datetime
 
 
@@ -105,6 +116,20 @@ class AnalysisView(BaseModel):
     question: str
     sql: str | None
     result: dict | None
+    created_at: datetime
+
+
+class AgentStepView(BaseModel):
+    id: str
+    analysis_run_id: str
+    name: str
+    status: str
+    input_summary: str
+    output: dict
+    model_version: str
+    prompt_version: str
+    error_message: str | None
+    elapsed_ms: int | None
     created_at: datetime
 
 

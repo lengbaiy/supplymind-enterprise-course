@@ -17,9 +17,16 @@ async def get_tenant_source(session: AsyncSession, source_id: str, tenant_id: st
     return source
 
 
+def ensure_source_enabled(source: DataSource) -> DataSource:
+    if source.status == "disabled":
+        raise DataSourceError("Data source is disabled")
+    return source
+
+
 __all__ = [
     "DataSourceError",
     "execute_guarded_query",
+    "ensure_source_enabled",
     "get_tenant_source",
     "synchronize_schema",
     "test_connection",

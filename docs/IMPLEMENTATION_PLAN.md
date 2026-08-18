@@ -93,6 +93,15 @@ The five points validate the course demonstration path. Production-scale SLA, di
 
 ## Detailed Backlog
 
+## Current Slice Status (2026-08-18)
+
+- **P03 complete:** data source lifecycle fields, schema snapshots, tenant-scoped detail/schema endpoints, enable/disable controls, deletion protection, and disabled-source execution guard are implemented. The frontend exposes source status, schema preview, and lifecycle actions.
+- **P04 complete:** tenant-scoped analysis detail and `AgentStep` timeline endpoints are implemented. The frontend exposes run history, SQL, stage status, timing, and failure context.
+- **P05 complete:** tenant-scoped report export history endpoint is implemented. The frontend exposes Markdown, citations, export history, and PDF action state.
+- **Unified verification:** Docker Compose services are healthy; Alembic is at `0006_datasource_lifecycle`; backend tests are `22 passed`; frontend build and Compose config pass. The remaining warning is the existing Vite bundle-size advisory.
+
+The next planned slice is P06 dashboard interaction and asynchronous refresh, followed by P07 observability/error UX and P08 browser E2E/deployment/course closure.
+
 The following slices are intentionally ordered by dependency. Each slice has one primary acceptance result and should be committed separately.
 
 ### S01 - Celery dispatch hardening
