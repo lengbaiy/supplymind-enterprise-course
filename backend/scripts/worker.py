@@ -17,10 +17,10 @@ celery_app.conf.task_routes = {"supplymind.*": {"queue": "analysis"}}
 
 
 @celery_app.task(bind=True, name="supplymind.dashboards.refresh", autoretry_for=(Exception,), retry_backoff=True, max_retries=3)
-def refresh_dashboard(self, tenant_id: str) -> str:
+def refresh_dashboard(self, tenant_id: str, filters: dict[str, str | None] | None = None) -> str:
     async def run() -> None:
         async with SessionLocal() as session:
-            await refresh_supply_chain_dashboard(session, tenant_id)
+            await refresh_supply_chain_dashboard(session, tenant_id, filters)
 
     asyncio.run(run())
     return tenant_id

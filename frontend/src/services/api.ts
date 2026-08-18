@@ -1,10 +1,12 @@
 export class ApiError extends Error {
   status: number;
+  traceId?: string;
 
-  constructor(status: number, message: string) {
-    super(message);
+  constructor(status: number, message: string, traceId?: string) {
+    super(traceId ? `${message}（Trace ID: ${traceId}）` : message);
     this.name = "ApiError";
     this.status = status;
+    this.traceId = traceId;
   }
 }
 
@@ -24,7 +26,7 @@ export async function apiRequest<T>(
   if (!response.ok) {
     const payload = await response.json().catch(() => ({}));
     const detail = typeof payload.detail === "string" ? payload.detail : "请求失败";
-    throw new ApiError(response.status, detail);
+    throw new ApiError(response.status, detail, response.headers.get("x-trace-id") || undefined);
   }
   return response.status === 204 ? (undefined as T) : response.json();
 }

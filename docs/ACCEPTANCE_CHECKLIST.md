@@ -25,7 +25,7 @@
 - [ ] 多语句、写操作、系统表、危险函数、越权表和超配额请求均被拒绝。
 - [ ] Celery 任务重复投递不会产生重复文档块或报告文件。
 - [ ] API、Worker、模型、MCP、SQL 和任务错误可在审计或日志中追踪。
-- [ ] Prometheus 可抓取 `/api/v1/metrics`，异常状态包含 HTTP 状态标签。
+- [x] Prometheus 可抓取 `/api/v1/metrics`，异常状态包含 HTTP 状态标签；API 响应带 `X-Trace-Id`。
 
 ## 核心 E2E
 

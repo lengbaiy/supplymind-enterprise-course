@@ -9,3 +9,4 @@ def test_metrics_endpoint_exposes_prometheus_format() -> None:
     assert response.status_code == 200
     assert "supplymind_http_requests_total" in response.text
     assert response.headers["content-type"].startswith("text/plain")
+    assert response.headers["x-trace-id"]

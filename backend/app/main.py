@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
 from time import perf_counter
+from uuid import uuid4
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -66,11 +67,13 @@ app.add_middleware(
 
 @app.middleware("http")
 async def metrics_middleware(request, call_next):
+    trace_id = request.headers.get("x-trace-id") or uuid4().hex
     started = perf_counter()
     response = await call_next(request)
     route = getattr(request.scope.get("route"), "path", request.url.path)
     HTTP_REQUESTS.labels(request.method, route, str(response.status_code)).inc()
     HTTP_REQUEST_DURATION.labels(request.method, route).observe(perf_counter() - started)
+    response.headers["X-Trace-Id"] = trace_id
     return response
 
 

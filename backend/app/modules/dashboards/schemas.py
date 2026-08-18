@@ -11,5 +11,6 @@ class DashboardView(BaseModel):
     refreshed_at: datetime | None
     cache_status: str
     refresh_interval_seconds: int
+    filters: dict[str, str | None]
     cards: list[dict[str, Any]]
     trend: list[dict[str, Any]]

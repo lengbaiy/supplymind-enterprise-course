@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
@@ -14,21 +14,27 @@ router = APIRouter(prefix="/api/v1", tags=["dashboards"])
 
 @router.get("/dashboards/supply-chain", response_model=DashboardView)
 async def supply_chain_dashboard(
+    factory: str | None = Query(default=None, max_length=80),
+    product_line: str | None = Query(default=None, max_length=80),
+    period: str | None = Query(default=None, pattern="^(7d|30d|90d)$"),
     session: AsyncSession = Depends(get_session),
     principal: Principal = Depends(get_principal),
 ) -> dict:
-    return await get_supply_chain_dashboard(session, principal.tenant_id)
+    return await get_supply_chain_dashboard(session, principal.tenant_id, {"factory": factory, "product_line": product_line, "period": period})
 
 
 @router.post("/dashboards/supply-chain/refresh", status_code=202)
 async def refresh_supply_chain_dashboard(
+    factory: str | None = Query(default=None, max_length=80),
+    product_line: str | None = Query(default=None, max_length=80),
+    period: str | None = Query(default=None, pattern="^(7d|30d|90d)$"),
     session: AsyncSession = Depends(get_session),
     principal: Principal = Depends(require_role("org_admin", "platform_admin")),
 ) -> dict[str, str]:
     if get_settings().ingestion_mode == "broker":
         from scripts.worker import celery_app
 
-        task = celery_app.send_task("supplymind.dashboards.refresh", args=[principal.tenant_id])
+        task = celery_app.send_task("supplymind.dashboards.refresh", args=[principal.tenant_id, {"factory": factory, "product_line": product_line, "period": period}])
         await audit(
             session,
             principal.tenant_id,
@@ -42,7 +48,7 @@ async def refresh_supply_chain_dashboard(
         return {"status": "queued", "task_id": task.id}
     from app.modules.dashboards.service import refresh_supply_chain_dashboard as refresh
 
-    await refresh(session, principal.tenant_id)
+    await refresh(session, principal.tenant_id, {"factory": factory, "product_line": product_line, "period": period})
     await audit(session, principal.tenant_id, principal.user_id, "dashboard.refreshed", "dashboard")
     await session.commit()
     return {"status": "completed", "task_id": "eager"}

@@ -51,7 +51,12 @@ async def _cache_payload(key: str, payload: dict[str, Any], ttl: int) -> None:
         await client.aclose()
 
 
-async def get_supply_chain_dashboard(session: AsyncSession, tenant_id: str) -> dict[str, Any]:
+async def get_supply_chain_dashboard(
+    session: AsyncSession,
+    tenant_id: str,
+    filters: dict[str, str | None] | None = None,
+) -> dict[str, Any]:
+    filters = {key: value for key, value in (filters or {}).items() if value}
     dashboard = await get_dashboard(session, tenant_id, "supply-chain")
     now = datetime.now(UTC)
     if not dashboard:
@@ -68,7 +73,8 @@ async def get_supply_chain_dashboard(session: AsyncSession, tenant_id: str) -> d
         )
         await session.commit()
     age = now - dashboard.cached_at if dashboard.cached_at else timedelta.max
-    cache_key = f"supplymind:dashboard:{tenant_id}:{dashboard.slug}"
+    filter_suffix = ":".join(f"{key}={filters[key]}" for key in sorted(filters)) or "all"
+    cache_key = f"supplymind:dashboard:{tenant_id}:{dashboard.slug}:{filter_suffix}"
     cached = await _redis_payload(cache_key)
     if cached:
         payload = cached
@@ -89,11 +95,16 @@ async def get_supply_chain_dashboard(session: AsyncSession, tenant_id: str) -> d
         "refreshed_at": dashboard.cached_at,
         "cache_status": cache_status,
         "refresh_interval_seconds": dashboard.refresh_interval_seconds,
+        "filters": {"factory": filters.get("factory"), "product_line": filters.get("product_line"), "period": filters.get("period")},
         **payload,
     }
 
 
-async def refresh_supply_chain_dashboard(session: AsyncSession, tenant_id: str) -> Dashboard:
+async def refresh_supply_chain_dashboard(
+    session: AsyncSession,
+    tenant_id: str,
+    filters: dict[str, str | None] | None = None,
+) -> Dashboard:
     dashboard = await get_dashboard(session, tenant_id, "supply-chain")
     now = datetime.now(UTC)
     if not dashboard:
@@ -110,8 +121,9 @@ async def refresh_supply_chain_dashboard(session: AsyncSession, tenant_id: str) 
     dashboard.cached_payload = DEFAULT_PAYLOAD
     dashboard.cached_at = now
     await session.commit()
+    filter_suffix = ":".join(f"{key}={value}" for key, value in sorted((filters or {}).items()) if value) or "all"
     await _cache_payload(
-        f"supplymind:dashboard:{tenant_id}:{dashboard.slug}",
+        f"supplymind:dashboard:{tenant_id}:{dashboard.slug}:{filter_suffix}",
         dashboard.cached_payload,
         dashboard.refresh_interval_seconds,
     )

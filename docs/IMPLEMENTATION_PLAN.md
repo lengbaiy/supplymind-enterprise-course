@@ -102,6 +102,12 @@ The five points validate the course demonstration path. Production-scale SLA, di
 
 The next planned slice is P06 dashboard interaction and asynchronous refresh, followed by P07 observability/error UX and P08 browser E2E/deployment/course closure.
 
+## P06-P08 Progress (2026-08-18)
+
+- **P06 implemented:** dashboard query filters (`factory`, `product_line`, `period`), filter-aware Redis keys, five-minute cache metadata, and Celery refresh tasks carrying filter context. The console now exposes filter controls and refresh/cache state.
+- **P07 implemented:** every API response receives an `X-Trace-Id`; frontend API errors retain the trace ID; readiness state is surfaced in the application shell; Prometheus metrics and dependency health remain available.
+- **P08 implemented (foundation):** navigation/types moved to `src/app`, shared `DataView` and empty state moved to `src/components`, dashboard controls moved to `src/features/dashboards`, and API/SSE services remain the only shared transport entry points. `main.tsx` is retained as the compatibility bootstrap.
+
 The following slices are intentionally ordered by dependency. Each slice has one primary acceptance result and should be committed separately.
 
 ### S01 - Celery dispatch hardening
