@@ -95,3 +95,20 @@ test("administrator can inspect the real operational resource paths", async ({ p
   await page.locator(".list-row .row-main-button").first().click();
   await expect(page.locator(".report-detail")).toBeVisible();
 });
+
+test("administrator receives a streamed analysis conclusion from active resources", async ({ page }) => {
+  await page.goto("/analysis");
+  await page.getByLabel("登录邮箱").fill("admin@demo.local");
+  await page.getByLabel("登录密码").fill("ChangeMe123!");
+  await page.getByLabel("组织标识").fill("demo-factory");
+  await page.getByRole("button", { name: "登录工作区" }).click();
+  await expect(page.getByRole("heading", { name: "运营总览" })).toBeVisible({ timeout: 15_000 });
+  await page.getByRole("navigation", { name: "主导航" }).getByRole("button", { name: /分析会话/ }).click();
+  await expect(page.locator("h2", { hasText: "分析会话" })).toBeVisible({ timeout: 15_000 });
+  await page.getByLabel("数据源").selectOption({ index: 1 });
+  await page.getByLabel("知识库").selectOption({ index: 1 });
+  await page.getByLabel("分析问题").fill("近30天各工厂生产达成率与缺料风险");
+  await page.getByRole("button", { name: "开始分析" }).click();
+  await expect(page.getByText("结论已生成")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(/已验证 \d+ 条结果/)).toBeVisible();
+});
