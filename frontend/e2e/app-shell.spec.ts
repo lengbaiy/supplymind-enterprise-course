@@ -96,6 +96,24 @@ test("administrator can inspect the real operational resource paths", async ({ p
   await expect(page.locator(".report-detail")).toBeVisible();
 });
 
+test("analysis history opens inside a contained session window", async ({ page }) => {
+  await page.goto("/analysis");
+  await page.getByLabel("登录邮箱").fill("admin@demo.local");
+  await page.getByLabel("登录密码").fill("ChangeMe123!");
+  await page.getByLabel("组织标识").fill("demo-factory");
+  await page.getByRole("button", { name: "登录工作区" }).click();
+  await page.getByRole("navigation", { name: "主导航" }).getByRole("button", { name: /分析会话/ }).click();
+  const history = page.locator(".analysis-history-row").first();
+  await expect(history).toBeVisible({ timeout: 15_000 });
+  await history.click();
+  const sessionWindow = page.locator(".analysis-session-window");
+  await expect(sessionWindow).toBeVisible();
+  await expect(sessionWindow.getByText("运行 ID：")).toBeVisible();
+  await expect(sessionWindow.locator(".step-timeline")).toBeVisible();
+  await sessionWindow.getByRole("button", { name: "关闭" }).click();
+  await expect(sessionWindow).toBeHidden();
+});
+
 test("administrator receives a streamed analysis conclusion from active resources", async ({ page }) => {
   await page.goto("/analysis");
   await page.getByLabel("登录邮箱").fill("admin@demo.local");
