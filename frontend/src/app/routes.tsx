@@ -2,6 +2,7 @@ import type { ComponentType } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { LegacyConsole } from "../features/legacy/LegacyConsole";
 import { AnalysisRoute } from "../features/analysis/AnalysisRoute";
+import { DataSourcesRoute } from "../features/datasources/DataSourcesRoute";
 import { NAV_ITEMS, type NavItem } from "./navigation";
 
 export const NAV_PATHS: Record<NavItem, string> = {
@@ -26,8 +27,9 @@ export function AppRoutes() {
     <Routes>
       <Route path="/" element={<Navigate to={NAV_PATHS["运营总览"]} replace />} />
       <Route path="/analysis" element={<AnalysisRoute />} />
+      <Route path="/data-sources" element={<DataSourcesRoute />} />
       {NAV_ITEMS.map((item) => {
-        if (item === "分析会话") return null;
+        if (item === "分析会话" || item === "数据源") return null;
         const Page = legacyRoute(item);
         return <Route key={item} path={NAV_PATHS[item]} element={<Page />} />;
       })}
