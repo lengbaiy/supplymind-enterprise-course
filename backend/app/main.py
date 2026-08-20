@@ -82,6 +82,27 @@ async def seed_demo_data() -> None:
                             Membership(organization_id=tenant_id, user_id=user.id, role=role)
                         )
             for organization in (primary, secondary):
+                # Earlier local builds shipped one legacy demo source pointing at
+                # a compose service that no longer exists. Repair it in place so
+                # existing demo workspaces keep their report and audit history.
+                legacy_source = await session.scalar(
+                    select(DataSource).where(
+                        DataSource.tenant_id == organization.id,
+                        DataSource.host == "demo-data",
+                        DataSource.database_name == "manufacturing_demo",
+                    )
+                )
+                if legacy_source:
+                    legacy_source.host = "demo-postgres"
+                    legacy_source.port = 5432
+                    legacy_source.database_name = "supplychain"
+                    legacy_source.username = "supplymind_ro"
+                    legacy_source.encrypted_password = encrypt_secret("supplymind-demo-ro")
+                    legacy_source.allowed_tables = base_tables + [
+                        "manufacturing_quality_events",
+                        "steel_plate_defects",
+                    ]
+                    legacy_source.status = "active"
                 if not organization.owner_user_id:
                     owner_membership = await session.scalar(
                         select(Membership).where(

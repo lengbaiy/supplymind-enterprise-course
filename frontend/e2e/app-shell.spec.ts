@@ -96,6 +96,32 @@ test("administrator can inspect the real operational resource paths", async ({ p
   await expect(page.locator(".report-detail")).toBeVisible();
 });
 
+test("administrator can retest the repaired local demonstration source", async ({ page }) => {
+  await page.goto("/data-sources");
+  await page.getByLabel("登录邮箱").fill("admin@demo.local");
+  await page.getByLabel("登录密码").fill("ChangeMe123!");
+  await page.getByLabel("组织标识").fill("demo-factory");
+  await page.getByRole("button", { name: "登录工作区" }).click();
+  await page.getByRole("navigation", { name: "主导航" }).getByRole("button", { name: /数据源/ }).click();
+  await page.locator(".datasource-row").filter({ hasText: "制造供应链演示库" }).getByRole("button", { name: "测试连接" }).click();
+  await expect(page.getByRole("status")).toContainText("连接测试通过", { timeout: 15_000 });
+});
+
+test("report preview opens the generated PDF in a new window", async ({ page }) => {
+  await page.goto("/reports");
+  await page.getByLabel("登录邮箱").fill("admin@demo.local");
+  await page.getByLabel("登录密码").fill("ChangeMe123!");
+  await page.getByLabel("组织标识").fill("demo-factory");
+  await page.getByRole("button", { name: "登录工作区" }).click();
+  await page.getByRole("navigation", { name: "主导航" }).getByRole("button", { name: /报告中心/ }).click();
+  await expect(page.locator(".report-row-actions").first()).toBeVisible({ timeout: 15_000 });
+  const popupPromise = page.waitForEvent("popup");
+  await page.locator(".report-row-actions").first().getByRole("button", { name: "预览 PDF" }).click();
+  const popup = await popupPromise;
+  await expect.poll(() => popup.url(), { timeout: 35_000 }).toMatch(/^blob:/);
+  await popup.close();
+});
+
 test("analysis history opens inside a contained session window", async ({ page }) => {
   await page.goto("/analysis");
   await page.getByLabel("登录邮箱").fill("admin@demo.local");

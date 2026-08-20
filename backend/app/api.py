@@ -3172,7 +3172,12 @@ async def test_data_source(
         )
         await session.commit()
         raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY, detail="Data source connection failed"
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail={
+                "code": "data_source_connection_failed",
+                "message": "无法连接到数据源",
+                "hint": "请检查主机、端口、只读账号密码和 TLS 配置后重试。",
+            },
         ) from exc
     source.status = "active"
     source.last_tested_at = datetime.now(UTC)

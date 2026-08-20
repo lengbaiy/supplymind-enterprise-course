@@ -1178,7 +1178,7 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
       setNotice("企业名称已更新");
     } catch (error) { setNotice(error instanceof Error ? error.message : "企业更新失败"); }
   }
-  async function downloadReport(id: string) {
+  async function downloadReport(id: string, previewWindow?: Window | null) {
     try {
       let response = await fetch(`${API}/reports/${id}/exports/pdf/download`, { headers });
       if (!response.ok && response.status === 404) {
@@ -1188,20 +1188,27 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
           await new Promise((resolve) => window.setTimeout(resolve, 1500));
           const status = await api<ReportExport>(`/reports/${id}/exports/pdf`);
           setReportExports((current) => [status, ...current.filter((item) => item.id !== status.id)]);
-          if (status.status === "failed") return setNotice(`PDF 导出失败：${status.error_message || "未知原因"}`);
+        if (status.status === "failed") { previewWindow?.close(); return setNotice(`PDF 导出失败：${status.error_message || "未知原因"}`); }
           if (status.status === "completed") {
             response = await fetch(`${API}/reports/${id}/exports/pdf/download`, { headers });
             break;
           }
         }
-        if (!response.ok) return setNotice("PDF 仍在生成中，请稍后在报告详情中重试");
+        if (!response.ok) { previewWindow?.close(); return setNotice("PDF 仍在生成中，请稍后在报告详情中重试"); }
       }
       if (!response.ok) {
         const payload = await response.json().catch(() => ({}));
         const trace = response.headers.get("x-trace-id");
+        previewWindow?.close();
         return setNotice(`${String(payload.detail || "PDF 下载失败，请稍后重试")}${trace ? `（Trace ID: ${trace}）` : ""}`);
       }
       const url = URL.createObjectURL(await response.blob());
+      if (previewWindow) {
+        previewWindow.location.href = url;
+        window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+        setNotice("PDF 已在新窗口打开");
+        return;
+      }
       const link = document.createElement("a");
       link.href = url;
       link.download = `${id}.pdf`;
@@ -1209,8 +1216,16 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
       URL.revokeObjectURL(url);
       setNotice("PDF 下载已开始");
     } catch (error) {
+      previewWindow?.close();
       setNotice(error instanceof Error ? error.message : "PDF 下载失败，请稍后重试");
     }
+  }
+  async function previewReport(id: string) {
+    const previewWindow = window.open("", "_blank");
+    if (!previewWindow) return setNotice("浏览器阻止了预览窗口，请允许弹窗后重试。");
+    previewWindow.document.title = "SupplyMind PDF 预览";
+    previewWindow.document.body.textContent = "正在准备 PDF，请勿关闭此窗口…";
+    await downloadReport(id, previewWindow);
   }
   async function retryReportExport(reportId: string, exportId: string) {
     try {
@@ -1944,7 +1959,7 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
           )}
         </DataView>
       );
-    if (nav === "报告中心") return <ReportsPage reports={reports} selectedReport={selectedReport} exports={reportExports} sources={sources} knowledgeBases={knowledge} filters={reportFilter} setFilters={setReportFilter} onOpen={(id) => void openReport(id)} onClose={() => setSelectedReport(null)} onDownload={(id) => void downloadReport(id)} onRetryExport={(reportId, exportId) => void retryReportExport(reportId, exportId)} />;
+    if (nav === "报告中心") return <ReportsPage reports={reports} selectedReport={selectedReport} exports={reportExports} sources={sources} knowledgeBases={knowledge} filters={reportFilter} setFilters={setReportFilter} onOpen={(id) => void openReport(id)} onClose={() => setSelectedReport(null)} onDownload={(id) => void downloadReport(id)} onPreview={(id) => void previewReport(id)} onRetryExport={(reportId, exportId) => void retryReportExport(reportId, exportId)} />;
     if (nav === "组织与审计") return <OrganizationAuditPage members={members} invitations={invitations} auditEvents={auditEvents} organization={organization} auditFilter={auditFilter} auditRunId={auditRunId} setAuditFilter={setAuditFilter} setAuditRunId={setAuditRunId} onInvite={inviteMember} onRoleChange={updateMemberRole} onToggle={toggleMember} onResend={resendInvitation} onRevoke={revokeInvitation} selectedAudit={selectedAudit} setSelectedAudit={setSelectedAudit} invitationLink={invitationLink} onDismissInvitationLink={() => setInvitationLink(null)} />;
     if (nav === "分析会话") return <AnalysisSessionPage conversationId={analysisConversationId} messages={analysisMessages} onClearContext={() => setAnalysisMessages([])} onNewConversation={startNewAnalysisConversation} question={question} setQuestion={setQuestion} events={events} result={analysisResult} busy={busy} onSubmit={analyze} onDownloadReport={downloadReport} sources={sources} knowledgeBases={knowledge} sourceId={analysisSourceId} knowledgeBaseId={analysisKnowledgeBaseId} setSourceId={setAnalysisSourceId} setKnowledgeBaseId={setAnalysisKnowledgeBaseId} runs={analyses} page={analysisPage} pageSize={analysisPageSize} hasMore={analysisHasMore} setPage={setAnalysisPage} setPageSize={setAnalysisPageSize} onOpenRun={(id) => void openAnalysis(id)} selectedRun={selectedAnalysis} steps={analysisSteps} onCloseRun={() => setSelectedAnalysis(null)} onCancelRun={(id) => void cancelAnalysis(id)} onRetryRun={(id) => void retryAnalysis(id)} />;
     return <OperationsOverviewPage dashboard={dashboard} dimensions={dashboardDimensions} filters={dashboardFilters} refreshing={refreshingDashboard} config={dashboardConfig} canConfigure={organization ? ["org_admin", "platform_admin"].includes(organization.role) : false} onChangeFilters={setDashboardFilters} onRefresh={() => void refreshDashboard()} onSaveConfig={(seconds) => void saveDashboardConfig(seconds)} onOpenAnalysis={(nextQuestion) => { if (nextQuestion) setQuestion(nextQuestion); selectNav("分析会话"); }} chartRef={chartRef} factoryChartRef={factoryChartRef} supplierChartRef={supplierChartRef} question={question} setQuestion={setQuestion} events={events} result={analysisResult} busy={busy} onSubmit={analyze} onDownloadReport={downloadReport} sources={sources} knowledgeBases={knowledge} sourceId={analysisSourceId} knowledgeBaseId={analysisKnowledgeBaseId} setSourceId={setAnalysisSourceId} setKnowledgeBaseId={setAnalysisKnowledgeBaseId} />;

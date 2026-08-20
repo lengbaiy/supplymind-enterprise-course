@@ -47,8 +47,13 @@ export async function apiRequest<T>(
   }
   if (!response.ok) {
     const payload = await response.json().catch(() => ({}));
-    const detail = typeof payload.detail === "string" ? payload.detail : "请求失败";
-    throw new ApiError(response.status, detail, response.headers.get("x-trace-id") || undefined);
+    const detail = payload.detail;
+    const message = typeof detail === "string"
+      ? detail
+      : detail && typeof detail === "object"
+        ? `${String(detail.message || "请求失败")}${detail.hint ? `：${String(detail.hint)}` : ""}`
+        : "请求失败";
+    throw new ApiError(response.status, message, response.headers.get("x-trace-id") || undefined);
   }
   return response.status === 204 ? (undefined as T) : response.json();
 }
