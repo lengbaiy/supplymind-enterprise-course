@@ -5,16 +5,16 @@ type Props = {
   nav: string;
   items: readonly NavItem[];
   organizationName?: string;
-  systemStatus: "ready" | "degraded";
+  systemStatus?: "ready" | "degraded";
   busy?: boolean;
-  topbarActions: ReactNode;
+  topbarActions?: ReactNode;
   children: ReactNode;
   onNavigate: (item: NavItem) => void;
   onRefresh: () => void;
   onLogout: () => void;
 };
 
-export function AppShell({ nav, items, organizationName, systemStatus, busy, topbarActions, children, onNavigate, onRefresh, onLogout }: Props) {
+export function AppShell({ nav, items, organizationName, systemStatus = "ready", busy, topbarActions, children, onNavigate, onRefresh, onLogout }: Props) {
   const [moreOpen, setMoreOpen] = useState(false);
   const primaryItems = items.filter((item) => ["运营总览", "项目管理", "分析会话", "数据源", "知识库"].includes(item));
   const secondaryItems = items.filter((item) => !primaryItems.includes(item));

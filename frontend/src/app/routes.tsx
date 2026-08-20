@@ -1,6 +1,7 @@
 import type { ComponentType } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { LegacyConsole } from "../features/legacy/LegacyConsole";
+import { AnalysisRoute } from "../features/analysis/AnalysisRoute";
 import { NAV_ITEMS, type NavItem } from "./navigation";
 
 export const NAV_PATHS: Record<NavItem, string> = {
@@ -24,7 +25,9 @@ export function AppRoutes() {
   return (
     <Routes>
       <Route path="/" element={<Navigate to={NAV_PATHS["运营总览"]} replace />} />
+      <Route path="/analysis" element={<AnalysisRoute />} />
       {NAV_ITEMS.map((item) => {
+        if (item === "分析会话") return null;
         const Page = legacyRoute(item);
         return <Route key={item} path={NAV_PATHS[item]} element={<Page />} />;
       })}
