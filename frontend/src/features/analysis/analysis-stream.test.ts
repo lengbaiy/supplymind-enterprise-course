@@ -11,11 +11,13 @@ describe("analysis stream state", () => {
     snapshot = mergeAnalysisEvent(snapshot, { event: "completed", data: { run_id: "run-1", sql: "select * from orders", result: { rows: [{ id: 1 }, { id: 2 }] } } });
     expect(snapshot).toMatchObject({ runId: "run-1", citationCount: 3, rowCount: 2, result: { run_id: "run-1" } });
     expect(snapshot.stages.every((stage) => stage.status === "completed")).toBe(true);
+    expect(snapshot.activity.map((item) => item.event)).toContain("分析完成");
   });
   it("marks only the active stage failed and keeps a recoverable reason", () => {
     const started = mergeAnalysisEvent(freshSnapshot(), { event: "step_started", data: { step: "query" } });
     const failed = mergeAnalysisEvent(started, { event: "failed", data: { message: "SQL Guard 拒绝了查询" } });
     expect(failed.error).toBe("SQL Guard 拒绝了查询");
     expect(failed.stages.find((stage) => stage.id === "query")?.status).toBe("failed");
+    expect(failed.activity.at(-1)?.message).toBe("SQL Guard 拒绝了查询");
   });
 });

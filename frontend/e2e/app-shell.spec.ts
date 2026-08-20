@@ -109,6 +109,9 @@ test("administrator receives a streamed analysis conclusion from active resource
   await page.getByLabel("知识库").selectOption({ index: 1 });
   await page.getByLabel("分析问题").fill("近30天各工厂生产达成率与缺料风险");
   await page.getByRole("button", { name: "开始分析" }).click();
+  await expect(page.getByText("实时运行状态")).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText("任务已创建")).toBeVisible({ timeout: 10_000 });
   await expect(page.getByText("结论已生成")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText("分析完成")).toBeVisible();
   await expect(page.getByText(/已验证 \d+ 条结果/)).toBeVisible();
 });

@@ -13,6 +13,6 @@ describe("AnalysisPanel", () => {
   it("shows a recoverable API failure instead of an empty result", () => {
     render(<AnalysisPanel {...base} error="所选数据源当前不可用于分析（Trace ID: abc）" />);
     expect(screen.getByText("所选数据源当前不可用于分析（Trace ID: abc）")).toBeVisible();
-    expect(screen.getByText("实时进度")).toBeVisible();
+    expect(screen.getByText("实时运行状态")).toBeVisible();
   });
 });
