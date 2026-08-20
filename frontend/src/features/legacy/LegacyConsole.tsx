@@ -532,7 +532,9 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
       if (!response.ok) {
         const payload = await response.json().catch(() => ({}));
         const trace = response.headers.get("x-trace-id");
-        throw new Error(`${String(payload.detail || "分析请求被拒绝")}${trace ? `（Trace ID: ${trace}）` : ""}`);
+        const detail = payload.detail;
+        const message = typeof detail === "object" && detail ? String(detail.message || detail.hint || "分析请求被拒绝") : String(detail || "分析请求被拒绝");
+        throw new Error(`${message}${trace ? `（Trace ID: ${trace}）` : ""}`);
       }
       const parsed = parseSseEvents(await readSseResponse(response, (chunk) => {
         const queued = chunk.find((item) => item.event === "queued");
@@ -582,7 +584,9 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
           setEvents((current) => [...current, "分析连接中断，运行状态暂不可恢复"]);
         }
       } else {
-        setEvents([error instanceof Error ? error.message : "分析失败"]);
+        const message = error instanceof Error ? error.message : "分析失败";
+        setEvents([message]);
+        setAnalysisMessages((current) => [...current, { role: "assistant", content: `本次分析未执行：${message}`, created_at: new Date().toISOString() }]);
       }
     } finally {
       setBusy(false);
