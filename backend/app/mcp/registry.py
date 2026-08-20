@@ -61,7 +61,9 @@ class ToolRegistry:
         last_error: Exception | None = None
         for attempt in range(2):
             try:
-                return await asyncio.wait_for(self._handlers[name](input_value), definition.timeout_seconds)
+                return await asyncio.wait_for(
+                    self._handlers[name](input_value), definition.timeout_seconds
+                )
             except (TimeoutError, OSError, RuntimeError) as exc:
                 last_error = exc
                 if attempt == 0:

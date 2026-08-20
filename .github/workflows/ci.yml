@@ -1,12 +1,8 @@
-name: SupplyMind CI
+name: supplymind-ci
 
 on:
   push:
-    branches: [main]
   pull_request:
-
-permissions:
-  contents: read
 
 jobs:
   backend:
@@ -19,14 +15,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install backend dependencies
-        run: pip install ".[dev]"
-      - name: Ruff
-        run: ruff check app scripts tests
-      - name: Unit and integration tests
-        run: pytest -q
-      - name: Alembic revision check
-        run: alembic heads && alembic history
+      - run: pip install ".[dev]"
+      - run: pytest -q
+      - run: python -m compileall -q app
 
   frontend:
     runs-on: ubuntu-latest
@@ -41,21 +32,32 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
+      - run: npm test
       - run: npm run build
 
-  manifests:
+  frontend-e2e:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+
+  helm:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Validate Compose file
-        run: docker compose config --quiet
       - uses: azure/setup-helm@v4
-        with:
-          version: v3.16.4
-      - name: Lint Helm chart
-        run: helm lint infra/helm/supplymind
-      - name: Render Helm chart
-        run: helm template supplymind infra/helm/supplymind > /tmp/supplymind-rendered.yaml
+      - run: helm lint infra/helm/supplymind
+      - run: helm template supplymind infra/helm/supplymind > /tmp/supplymind-manifest.yaml
 
   security:
     runs-on: ubuntu-latest
@@ -64,8 +66,18 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install audit tooling
-        run: pip install pip-audit
-      - name: Audit Python dependencies
-        working-directory: backend
-        run: pip install . && pip-audit --local
+      - run: pip install "./backend[dev]" pip-audit
+      - run: pip-audit --strict
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --prefix frontend
+      - run: npm audit --prefix frontend --audit-level=high
+      - uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true

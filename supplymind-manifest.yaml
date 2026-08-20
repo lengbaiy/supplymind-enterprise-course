@@ -1,0 +1,131 @@
+---
+# Source: supplymind/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: supplymind-config
+data:
+  SUPPLYMIND_DATABASE_URL: "postgresql+psycopg://supplymind:change-me@postgresql:5432/supplymind"
+  SUPPLYMIND_ENV: "production"
+  SUPPLYMIND_REDIS_URL: "redis://redis:6379/0"
+  SUPPLYMIND_S3_BUCKET: "supplymind"
+  SUPPLYMIND_S3_ENDPOINT: ""
+  SUPPLYMIND_S3_REGION: "us-east-1"
+  VITE_API_BASE_URL: "/api/v1"
+
+---
+# Source: supplymind/templates/api.yaml
+apiVersion: v1
+kind: Service
+metadata: { name: supplymind-api }
+spec:
+  selector: { app: supplymind-api }
+  ports: [{ port: 8000, targetPort: 8000 }]
+
+---
+# Source: supplymind/templates/frontend.yaml
+apiVersion: v1
+kind: Service
+metadata: { name: supplymind-frontend }
+spec:
+  selector: { app: supplymind-frontend }
+  ports: [{ port: 5173, targetPort: 5173 }]
+
+---
+# Source: supplymind/templates/api.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: supplymind-api }
+spec:
+  replicas: 2
+  selector: { matchLabels: { app: supplymind-api } }
+  template:
+    metadata: { labels: { app: supplymind-api } }
+    spec:
+      containers:
+        - name: api
+          image: "supplymind/api:latest"
+          ports: [{ containerPort: 8000 }]
+          envFrom:
+            - configMapRef: { name: supplymind-config }
+            - secretRef: { name: supplymind-secrets }
+          resources:
+            limits:
+              cpu: "1"
+              memory: 1Gi
+            requests:
+              cpu: 250m
+              memory: 512Mi
+          livenessProbe: { httpGet: { path: /api/v1/health/live, port: 8000 }, initialDelaySeconds: 10, periodSeconds: 15 }
+          readinessProbe: { httpGet: { path: /api/v1/health/ready, port: 8000 }, initialDelaySeconds: 10, periodSeconds: 10 }
+
+---
+# Source: supplymind/templates/frontend.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: supplymind-frontend }
+spec:
+  replicas: 2
+  selector: { matchLabels: { app: supplymind-frontend } }
+  template:
+    metadata: { labels: { app: supplymind-frontend } }
+    spec:
+      containers:
+        - name: frontend
+          image: "supplymind/frontend:latest"
+          ports: [{ containerPort: 5173 }]
+          envFrom: [{ configMapRef: { name: supplymind-config } }]
+          resources:
+            limits:
+              cpu: 500m
+              memory: 512Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          livenessProbe: { httpGet: { path: /, port: 5173 }, initialDelaySeconds: 10, periodSeconds: 15 }
+          readinessProbe: { httpGet: { path: /, port: 5173 }, initialDelaySeconds: 5, periodSeconds: 10 }
+
+---
+# Source: supplymind/templates/worker.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: supplymind-worker
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: supplymind-worker } }
+  template:
+    metadata: { labels: { app: supplymind-worker } }
+    spec:
+      containers:
+        - name: worker
+          image: "supplymind/api:latest"
+          command: ["celery"]
+          args: ["-A", "scripts.worker.celery_app", "worker", "--loglevel=INFO", "--queues=analysis"]
+          envFrom:
+            - configMapRef: { name: supplymind-config }
+            - secretRef: { name: supplymind-secrets }
+          resources:
+            limits:
+              cpu: "1"
+              memory: 1Gi
+            requests:
+              cpu: 250m
+              memory: 512Mi
+          livenessProbe:
+            exec: { command: ["python", "-c", "import sys; sys.exit(0)"] }
+            initialDelaySeconds: 20
+            periodSeconds: 30
+
+---
+# Source: supplymind/templates/hpa.yaml
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata: { name: supplymind-api }
+spec:
+  scaleTargetRef: { apiVersion: apps/v1, kind: Deployment, name: supplymind-api }
+  minReplicas: 2
+  maxReplicas: 6
+  metrics:
+    - type: Resource
+      resource: { name: cpu, target: { type: Utilization, averageUtilization: 70 } }

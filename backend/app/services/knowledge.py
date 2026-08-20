@@ -14,6 +14,17 @@ ALLOWED_TYPES = {
 }
 
 
+def classify_document(filename: str, text: str) -> str:
+    haystack = f"{filename} {text[:8000]}".lower()
+    if any(keyword in haystack for keyword in ("指标", "公式", "口径", "metric", "kpi")):
+        return "metric_definition"
+    if any(keyword in haystack for keyword in ("制度", "规范", "policy", "compliance")):
+        return "policy"
+    if any(keyword in haystack for keyword in ("流程", "作业", "步骤", "process", "procedure")):
+        return "process"
+    return "other"
+
+
 def extract_text(filename: str, content_type: str, payload: bytes) -> tuple[str, dict]:
     suffix = filename.lower().rsplit(".", 1)[-1] if "." in filename else ""
     if content_type == "application/pdf" or suffix == "pdf":

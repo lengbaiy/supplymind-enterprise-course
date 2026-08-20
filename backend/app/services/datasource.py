@@ -30,7 +30,11 @@ def validate_source_host(host: str) -> None:
         address = ipaddress.ip_address(normalized)
     except ValueError as exc:
         raise DataSourceError("Host is not in the deployment allowlist") from exc
-    networks = [ipaddress.ip_network(item.strip()) for item in settings.datasource_allowed_cidrs.split(",") if item.strip()]
+    networks = [
+        ipaddress.ip_network(item.strip())
+        for item in settings.datasource_allowed_cidrs.split(",")
+        if item.strip()
+    ]
     if not any(address in network for network in networks):
         raise DataSourceError("IP address is not in an allowed CIDR")
 
@@ -63,21 +67,38 @@ async def synchronize_schema(source: DataSource) -> SourceSchema:
     engine = source_engine(source)
     try:
         async with engine.connect() as connection:
+
             def collect(sync_connection) -> list[dict]:
                 inspector = inspect(sync_connection)
                 tables: list[dict] = []
                 for table_name in inspector.get_table_names():
                     if table_name not in source.allowed_tables:
                         continue
+                    columns = []
+                    for column in inspector.get_columns(table_name):
+                        columns.append(
+                            {
+                                "name": column["name"],
+                                "type": str(column["type"]),
+                                "nullable": column["nullable"],
+                                "comment": column.get("comment"),
+                            }
+                        )
+                    try:
+                        table_comment = inspector.get_table_comment(table_name).get("text")
+                    except (NotImplementedError, AttributeError):
+                        table_comment = None
                     tables.append(
                         {
                             "name": table_name,
-                            "columns": [
-                                {"name": column["name"], "type": str(column["type"]), "nullable": column["nullable"]}
-                                for column in inspector.get_columns(table_name)
-                            ],
-                            "primary_key": inspector.get_pk_constraint(table_name).get("constrained_columns", []),
+                            "columns": columns,
+                            "primary_key": inspector.get_pk_constraint(table_name).get(
+                                "constrained_columns", []
+                            ),
                             "foreign_keys": inspector.get_foreign_keys(table_name),
+                            "indexes": inspector.get_indexes(table_name),
+                            "comment": table_comment,
+                            "sample_limit": 100,
                         }
                     )
                 return tables
@@ -87,12 +108,14 @@ async def synchronize_schema(source: DataSource) -> SourceSchema:
         await engine.dispose()
 
 
-async def execute_guarded_query(source: DataSource, sql: str) -> tuple[GuardedSQL, list[dict]]:
+async def execute_guarded_query(
+    source: DataSource, sql: str, params: dict[str, object] | None = None
+) -> tuple[GuardedSQL, list[dict]]:
     guarded = validate_read_only_sql(sql, set(source.allowed_tables), get_settings().sql_max_rows)
     engine = source_engine(source)
     try:
         async with engine.connect() as connection:
-            result = await connection.execute(text(guarded.sql))
+            result = await connection.execute(text(guarded.sql), params or {})
             rows = [dict(row) for row in result.mappings().fetchmany(get_settings().sql_max_rows)]
             return guarded, rows
     finally:

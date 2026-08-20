@@ -11,7 +11,9 @@ SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 
 async def set_tenant_context(session: AsyncSession, tenant_id: str) -> None:
     if session.bind and session.bind.dialect.name == "postgresql":
-        await session.execute(text("select set_config('app.tenant_id', :tenant_id, true)"), {"tenant_id": tenant_id})
+        await session.execute(
+            text("select set_config('app.tenant_id', :tenant_id, true)"), {"tenant_id": tenant_id}
+        )
 
 
 async def get_session() -> AsyncGenerator[AsyncSession, None]:

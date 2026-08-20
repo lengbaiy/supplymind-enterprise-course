@@ -85,6 +85,7 @@ services:
     volumes:
       - documents_data:/data/documents
       - reports_data:/data/reports
+      - ./docs/knowledge-base:/app/docs/knowledge-base:ro
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_started }
@@ -112,6 +113,7 @@ services:
     volumes:
       - documents_data:/data/documents
       - reports_data:/data/reports
+      - ./docs/knowledge-base:/app/docs/knowledge-base:ro
   frontend:
     build: ./frontend
     environment: { VITE_API_BASE_URL: http://localhost:8000/api/v1 }
@@ -122,6 +124,11 @@ services:
       interval: 10s
       timeout: 5s
       retries: 12
+  oidc-mock:
+    build: ./backend
+    profiles: [oidc]
+    command: uvicorn scripts.oidc_mock:app --host 0.0.0.0 --port 8081
+    ports: ["8081:8081"]
   prometheus:
     image: prom/prometheus:v2.54.1
     profiles: [observability]

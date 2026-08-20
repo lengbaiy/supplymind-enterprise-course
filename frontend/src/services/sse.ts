@@ -12,3 +12,23 @@ export function parseSseEvents(text: string): SseEvent[] {
     }
   });
 }
+
+export async function readSseResponse(response: Response, onChunk?: (events: SseEvent[]) => void): Promise<string> {
+  if (!response.body) return response.text();
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let text = "";
+  let buffer = "";
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const blocks = buffer.split("\n\n");
+    buffer = blocks.pop() || "";
+    const chunkEvents = parseSseEvents(blocks.join("\n\n") + (blocks.length ? "\n\n" : ""));
+    if (chunkEvents.length) onChunk?.(chunkEvents);
+    text += blocks.join("\n\n") + (blocks.length ? "\n\n" : "");
+  }
+  text += buffer + decoder.decode();
+  return text;
+}

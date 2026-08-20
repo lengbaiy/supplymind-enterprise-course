@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     sql_timeout_seconds: int = 15
     sql_max_rows: int = 500
     refresh_token_days: int = 14
-    datasource_allowed_hosts: str = "localhost,127.0.0.1,demo-data"
+    datasource_allowed_hosts: str = "localhost,127.0.0.1,demo-data,demo-postgres,demo-mysql"
     datasource_allowed_cidrs: str = "127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
     chat_base_url: str | None = None
     chat_model: str | None = None
@@ -24,11 +24,16 @@ class Settings(BaseSettings):
     embedding_base_url: str | None = None
     embedding_model: str | None = None
     embedding_api_key: str | None = None
+    embedding_dimension: int = 1024
+    ai_max_graph_steps: int = 12
+    ai_max_tool_calls: int = 8
+    ai_answer_model: str | None = None
     oidc_issuer: str | None = None
     oidc_client_id: str | None = None
     oidc_client_secret: str | None = None
     oidc_redirect_uri: str = "http://localhost:5173/auth/callback"
     oidc_state_ttl_seconds: int = 300
+    oidc_auto_provision: bool = False
     report_directory: str = "./data/reports"
     document_directory: str = "./data/documents"
     ingestion_mode: str = "eager"
@@ -43,7 +48,11 @@ class Settings(BaseSettings):
 
     @property
     def datasource_host_list(self) -> set[str]:
-        return {value.strip().lower() for value in self.datasource_allowed_hosts.split(",") if value.strip()}
+        return {
+            value.strip().lower()
+            for value in self.datasource_allowed_hosts.split(",")
+            if value.strip()
+        }
 
     @property
     def is_development(self) -> bool:

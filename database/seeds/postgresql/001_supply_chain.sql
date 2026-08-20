@@ -78,6 +78,29 @@ VALUES
   ('WO-20260802', '苏州工厂', '新能源', 800, 760, CURRENT_DATE - 4),
   ('WO-20260803', '成都工厂', '新能源', 600, 510, CURRENT_DATE - 3)
 ON CONFLICT (order_number) DO NOTHING;
+INSERT INTO production_work_orders
+  (order_number, factory, product_line, planned_quantity, completed_quantity, planned_date)
+VALUES
+  ('WO-20260804', '苏州工厂', '智能控制', 1200, 1140, CURRENT_DATE - 10),
+  ('WO-20260805', '成都工厂', '新能源', 900, 720, CURRENT_DATE - 12),
+  ('WO-20260806', '上海工厂', '智能控制', 700, 690, CURRENT_DATE - 18),
+  ('WO-20260807', '上海工厂', '新能源', 1500, 1280, CURRENT_DATE - 22),
+  ('WO-20260808', '苏州工厂', '新能源', 1100, 1030, CURRENT_DATE - 27)
+ON CONFLICT (order_number) DO NOTHING;
+INSERT INTO purchase_orders (po_number, supplier_id, planned_date, delivered_date, status)
+SELECT v.po_number, s.supplier_id, v.planned_date, v.delivered_date, v.status
+FROM (VALUES
+  ('PO-20260801','SUP-001',CURRENT_DATE - 8,CURRENT_DATE - 7,'delivered'),
+  ('PO-20260802','SUP-002',CURRENT_DATE - 6,CURRENT_DATE - 2,'delivered'),
+  ('PO-20260803','SUP-001',CURRENT_DATE - 4,NULL,'late'),
+  ('PO-20260804','SUP-002',CURRENT_DATE - 2,NULL,'open'),
+  ('PO-20260805','SUP-001',CURRENT_DATE - 20,CURRENT_DATE - 19,'delivered'),
+  ('PO-20260806','SUP-002',CURRENT_DATE - 25,CURRENT_DATE - 23,'delivered')
+) v(po_number, supplier_code, planned_date, delivered_date, status)
+JOIN suppliers s ON s.supplier_code = v.supplier_code
+ON CONFLICT (po_number) DO NOTHING;
+UPDATE purchase_orders SET delivered_date = planned_date - INTERVAL '1 day'
+WHERE po_number IN ('PO-20260801', 'PO-20260802', 'PO-20260805');
 INSERT INTO inventory_balances (material_id, factory, quantity, snapshot_date)
 SELECT m.material_id, '成都工厂', v.quantity, CURRENT_DATE
 FROM materials m
@@ -87,6 +110,27 @@ WHERE NOT EXISTS (
   SELECT 1 FROM inventory_balances i
   WHERE i.material_id = m.material_id AND i.factory = '成都工厂' AND i.snapshot_date = CURRENT_DATE
 );
+INSERT INTO inventory_balances (material_id, factory, quantity, snapshot_date)
+SELECT m.material_id, x.factory, x.quantity, CURRENT_DATE
+FROM materials m
+JOIN (VALUES ('MAT-001','苏州工厂',180::numeric),('MAT-002','苏州工厂',42::numeric),('MAT-003','上海工厂',210::numeric),('MAT-001','上海工厂',55::numeric)) x(code, factory, quantity)
+  ON x.code = m.material_code
+WHERE NOT EXISTS (SELECT 1 FROM inventory_balances i WHERE i.material_id=m.material_id AND i.factory=x.factory AND i.snapshot_date=CURRENT_DATE);
+INSERT INTO quality_inspections (work_order_id, inspected_quantity, passed_quantity, inspected_at)
+SELECT work_order_id, planned_quantity, GREATEST(completed_quantity - 8, 0), planned_date
+FROM production_work_orders p
+WHERE NOT EXISTS (SELECT 1 FROM quality_inspections q WHERE q.work_order_id=p.work_order_id);
+INSERT INTO sales_orders (order_number, factory, product_line, ordered_quantity, delivered_quantity, promised_date, delivered_date)
+VALUES
+  ('SO-20260801','成都工厂','智能控制',500,420,CURRENT_DATE - 2,NULL),
+  ('SO-20260802','苏州工厂','新能源',380,380,CURRENT_DATE - 1,CURRENT_DATE - 2),
+  ('SO-20260803','上海工厂','新能源',900,760,CURRENT_DATE + 3,NULL),
+  ('SO-20260804','上海工厂','智能控制',620,620,CURRENT_DATE - 5,CURRENT_DATE - 6),
+  ('SO-20260805','成都工厂','新能源',700,500,CURRENT_DATE + 5,NULL)
+ON CONFLICT (order_number) DO NOTHING;
+INSERT INTO delivery_plans (sales_order_id, planned_date, actual_date)
+SELECT sales_order_id, promised_date, delivered_date FROM sales_orders s
+WHERE NOT EXISTS (SELECT 1 FROM delivery_plans d WHERE d.sales_order_id=s.sales_order_id);
 
 CREATE INDEX IF NOT EXISTS idx_work_orders_factory_date ON production_work_orders(factory, planned_date);
 CREATE INDEX IF NOT EXISTS idx_inventory_factory_snapshot ON inventory_balances(factory, snapshot_date);

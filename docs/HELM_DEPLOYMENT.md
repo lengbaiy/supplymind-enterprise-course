@@ -14,6 +14,8 @@ Remove-Item .helm-rendered.yaml -ErrorAction SilentlyContinue
 
 如果 Docker Hub 暂时不可用，可在可访问镜像仓库中使用相同版本的 Helm 3.16 镜像；不得将渲染产物提交到仓库。
 
+本项目也提供 `scripts/helm-smoke.ps1`，会使用本机 Helm 执行 lint/template；传入 `-RunCluster` 才会执行安装和回滚。执行前必须确认 `kubectl config current-context` 指向可用集群。
+
 生产环境应先创建密钥并通过 `existingSecret` 注入，例如：
 
 ```bash

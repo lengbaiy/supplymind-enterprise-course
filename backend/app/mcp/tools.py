@@ -64,18 +64,24 @@ class ReportExportOutput(BaseModel):
 
 
 def _source_query(session: AsyncSession, source_id: str, tenant_id: str):
-    return session.scalar(select(DataSource).where(DataSource.id == source_id, DataSource.tenant_id == tenant_id))
+    return session.scalar(
+        select(DataSource).where(DataSource.id == source_id, DataSource.tenant_id == tenant_id)
+    )
 
 
 def _chart(rows: list[dict[str, Any]]) -> dict[str, Any]:
     if not rows:
         return {"type": "table"}
     fields = list(rows[0])
-    numeric = next((field for field, value in rows[0].items() if isinstance(value, (int, float))), fields[-1])
+    numeric = next(
+        (field for field, value in rows[0].items() if isinstance(value, (int, float))), fields[-1]
+    )
     return {"type": "bar", "x": fields[0], "y": numeric}
 
 
-def register_default_tools(registry: ToolRegistry, session: AsyncSession, principal: Principal) -> None:
+def register_default_tools(
+    registry: ToolRegistry, session: AsyncSession, principal: Principal
+) -> None:
     async def schema_lookup(value: SchemaLookupInput) -> SchemaLookupOutput:
         source = await _source_query(session, value.data_source_id, principal.tenant_id)
         if not source:
@@ -87,12 +93,16 @@ def register_default_tools(registry: ToolRegistry, session: AsyncSession, princi
         source = await _source_query(session, value.data_source_id, principal.tenant_id)
         if not source:
             raise RuntimeError("Data source not found")
-        guarded = validate_read_only_sql(value.sql, set(source.allowed_tables), get_settings().sql_max_rows)
+        guarded = validate_read_only_sql(
+            value.sql, set(source.allowed_tables), get_settings().sql_max_rows
+        )
         _, rows = await execute_guarded_query(source, guarded.sql)
         return SQLQueryOutput(sql=guarded.sql, tables=guarded.tables, rows=rows)
 
     async def knowledge_search(value: KnowledgeSearchInput) -> KnowledgeSearchOutput:
-        results = await search_knowledge(session, principal.tenant_id, value.knowledge_base_id, value.query, value.limit)
+        results = await search_knowledge(
+            session, principal.tenant_id, value.knowledge_base_id, value.query, value.limit
+        )
         return KnowledgeSearchOutput(results=results)
 
     async def chart_render(value: ChartRenderInput) -> ChartRenderOutput:
@@ -103,8 +113,63 @@ def register_default_tools(registry: ToolRegistry, session: AsyncSession, princi
             raise RuntimeError("Only PDF export is supported")
         return ReportExportOutput(report_id=value.report_id, format=value.format, status="queued")
 
-    registry.register(ToolDefinition("schema.lookup", "Read approved datasource schema", frozenset({"analyst", "org_admin", "platform_admin"}), SideEffect.read, SchemaLookupInput, SchemaLookupOutput, 15), schema_lookup)
-    registry.register(ToolDefinition("sql.query", "Execute guarded read-only SQL", frozenset({"analyst", "org_admin", "platform_admin"}), SideEffect.read, SQLQueryInput, SQLQueryOutput, get_settings().sql_timeout_seconds), sql_query)
-    registry.register(ToolDefinition("knowledge.search", "Search tenant knowledge citations", frozenset({"analyst", "org_admin", "platform_admin"}), SideEffect.read, KnowledgeSearchInput, KnowledgeSearchOutput, 30), knowledge_search)
-    registry.register(ToolDefinition("chart.render", "Build chart specification", frozenset({"analyst", "org_admin", "platform_admin"}), SideEffect.read, ChartRenderInput, ChartRenderOutput, 10), chart_render)
-    registry.register(ToolDefinition("report.export", "Queue a report export", frozenset({"analyst", "org_admin", "platform_admin"}), SideEffect.export, ReportExportInput, ReportExportOutput, 15), report_export)
+    registry.register(
+        ToolDefinition(
+            "schema.lookup",
+            "Read approved datasource schema",
+            frozenset({"analyst", "org_admin", "platform_admin"}),
+            SideEffect.read,
+            SchemaLookupInput,
+            SchemaLookupOutput,
+            15,
+        ),
+        schema_lookup,
+    )
+    registry.register(
+        ToolDefinition(
+            "sql.query",
+            "Execute guarded read-only SQL",
+            frozenset({"analyst", "org_admin", "platform_admin"}),
+            SideEffect.read,
+            SQLQueryInput,
+            SQLQueryOutput,
+            get_settings().sql_timeout_seconds,
+        ),
+        sql_query,
+    )
+    registry.register(
+        ToolDefinition(
+            "knowledge.search",
+            "Search tenant knowledge citations",
+            frozenset({"analyst", "org_admin", "platform_admin"}),
+            SideEffect.read,
+            KnowledgeSearchInput,
+            KnowledgeSearchOutput,
+            30,
+        ),
+        knowledge_search,
+    )
+    registry.register(
+        ToolDefinition(
+            "chart.render",
+            "Build chart specification",
+            frozenset({"analyst", "org_admin", "platform_admin"}),
+            SideEffect.read,
+            ChartRenderInput,
+            ChartRenderOutput,
+            10,
+        ),
+        chart_render,
+    )
+    registry.register(
+        ToolDefinition(
+            "report.export",
+            "Queue a report export",
+            frozenset({"analyst", "org_admin", "platform_admin"}),
+            SideEffect.export,
+            ReportExportInput,
+            ReportExportOutput,
+            15,
+        ),
+        report_export,
+    )

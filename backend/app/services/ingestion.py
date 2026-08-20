@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.models import Chunk, Document, IngestionTask
-from app.services.knowledge import chunk_text, extract_text
+from app.services.knowledge import chunk_text, classify_document, extract_text
 from app.services.llm import OpenAICompatibleClient
 
 
@@ -22,15 +22,44 @@ async def process_ingestion(session: AsyncSession, task: IngestionTask, document
             raise ValueError("Document source is unavailable")
         payload = Path(document.source_path).read_bytes()
         text, metadata = extract_text(document.filename, document.content_type, payload)
+        document.category = classify_document(document.filename, text)
         await session.execute(delete(Chunk).where(Chunk.document_id == document.id))
         pieces = list(chunk_text(text))
         vectors = []
         settings = get_settings()
-        if pieces and settings.embedding_base_url and settings.embedding_model and settings.embedding_api_key:
+        if pieces:
+            if (
+                not settings.embedding_base_url
+                or not settings.embedding_model
+                or not settings.embedding_api_key
+            ):
+                raise ValueError(
+                    "Embedding model configuration is required before a document can be searchable"
+                )
             vectors = await OpenAICompatibleClient().embed([piece[1] for piece in pieces])
+            if (
+                vectors
+                and session.get_bind() is not None
+                and session.get_bind().dialect.name == "postgresql"
+                and len(vectors[0]) != settings.embedding_dimension
+            ):
+                raise ValueError(
+                    f"Embedding dimension {len(vectors[0])} does not match configured dimension {settings.embedding_dimension}"
+                )
+            document.embedding_model = settings.embedding_model
+            document.embedding_dimension = len(vectors[0]) if vectors else None
         for index, (ordinal, value, location) in enumerate(pieces):
             location.update(metadata)
-            session.add(Chunk(tenant_id=document.tenant_id, document_id=document.id, ordinal=ordinal, text=value, location=location, embedding=vectors[index] if vectors else None))
+            session.add(
+                Chunk(
+                    tenant_id=document.tenant_id,
+                    document_id=document.id,
+                    ordinal=ordinal,
+                    text=value,
+                    location=location,
+                    embedding=vectors[index] if vectors else None,
+                )
+            )
         document.status = "completed"
         task.status = "completed"
         task.error_message = None

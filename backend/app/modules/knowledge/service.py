@@ -11,7 +11,9 @@ async def get_tenant_knowledge_base(
 ) -> KnowledgeBase:
     knowledge_base = await get_for_tenant(session, knowledge_base_id, tenant_id)
     if not knowledge_base:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Knowledge base not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Knowledge base not found"
+        )
     return knowledge_base
 
 

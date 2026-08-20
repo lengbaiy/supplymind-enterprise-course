@@ -28,7 +28,9 @@ async def get_principal(
         )
     )
     if not membership:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization access denied")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Organization access denied"
+        )
     await set_tenant_context(session, claims["org"])
     return Principal(user_id=claims["sub"], tenant_id=claims["org"], role=membership.role)  # type: ignore[arg-type]
 

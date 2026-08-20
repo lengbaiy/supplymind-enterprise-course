@@ -32,7 +32,12 @@ def validate_read_only_sql(sql: str, allowed_tables: set[str], max_rows: int = 5
     statement = statements[0]
     if statement.find(exp.Insert) or statement.find(exp.Update) or statement.find(exp.Delete):
         raise SQLGuardError("Write operations are forbidden")
-    tables = tuple(sorted({table.name for table in statement.find_all(exp.Table)}))
+    cte_names = {cte.alias_or_name for cte in statement.find_all(exp.CTE) if cte.alias_or_name}
+    tables = tuple(
+        sorted(
+            {table.name for table in statement.find_all(exp.Table) if table.name not in cte_names}
+        )
+    )
     if not tables:
         raise SQLGuardError("Query must reference an approved table")
     unknown = set(tables) - allowed_tables
