@@ -173,6 +173,7 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
   const factoryChartRef = useRef<HTMLDivElement>(null);
   const supplierChartRef = useRef<HTMLDivElement>(null);
   const workspaceLoadedRef = useRef(false);
+  const knowledgeRequestVersionRef = useRef(0);
   useEffect(() => {
     if (!profileOpen) return;
     const closeOnOutside = (event: MouseEvent) => {
@@ -245,7 +246,9 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
         setAnalysisSourceId((current) => current && currentSources.some((item) => item.id === current) ? current : "");
       }
       if (nav === "知识库" || nav === "分析会话") {
+        const requestVersion = ++knowledgeRequestVersionRef.current;
         const currentKnowledge = await api<KnowledgeBase[]>(`/knowledge-bases?${new URLSearchParams({ page: String(knowledgePage), page_size: String(knowledgePageSize), ...(knowledgeFilter.name ? { name: knowledgeFilter.name } : {}), ...(knowledgeFilter.status ? { status: knowledgeFilter.status } : {}) }).toString()}`);
+        if (requestVersion !== knowledgeRequestVersionRef.current) return;
         setKnowledge(currentKnowledge);
         setKnowledgeHasMore(currentKnowledge.length === knowledgePageSize);
         setAnalysisKnowledgeBaseId((current) => current && currentKnowledge.some((item) => item.id === current) ? current : "");
@@ -747,6 +750,9 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
     const target = pendingKnowledgeDelete;
     try {
       await api(`/knowledge-bases/${target.id}`, { method: "DELETE" });
+      // Invalidate any list request that started before the deletion. Without
+      // this, its stale response can put the deleted card back on screen.
+      knowledgeRequestVersionRef.current += 1;
       setKnowledge((current) => current.filter((item) => item.id !== target.id));
       setDocuments((current) => current.filter((item) => item.knowledge_base_id !== target.id));
       setSelectedKnowledge(null);

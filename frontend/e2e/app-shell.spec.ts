@@ -107,6 +107,27 @@ test("administrator can retest the repaired local demonstration source", async (
   await expect(page.getByRole("status")).toContainText("连接测试通过", { timeout: 15_000 });
 });
 
+test("deleting an empty archived knowledge base removes its card immediately", async ({ page }) => {
+  const name = `删除回归-${Date.now()}`;
+  await page.goto("/knowledge");
+  await page.getByLabel("登录邮箱").fill("admin@demo.local");
+  await page.getByLabel("登录密码").fill("ChangeMe123!");
+  await page.getByLabel("组织标识").fill("demo-factory");
+  await page.getByRole("button", { name: "登录工作区" }).click();
+  await page.getByRole("navigation", { name: "主导航" }).getByRole("button", { name: /知识库/ }).click();
+  await page.getByLabel("按知识库状态筛选").selectOption("");
+  await page.getByLabel("知识库名称", { exact: true }).fill(name);
+  await page.getByRole("button", { name: /创建知识库/ }).click();
+  await page.getByLabel("按知识库名称筛选").fill(name);
+  const card = page.locator(".knowledge-card", { hasText: name });
+  await expect(card).toBeVisible({ timeout: 15_000 });
+  await card.getByRole("button", { name: /管理详情/ }).click();
+  await page.getByRole("button", { name: "归档知识库" }).click();
+  await page.getByRole("button", { name: "删除知识库" }).click();
+  await page.getByRole("button", { name: "确认删除" }).click();
+  await expect(card).toHaveCount(0);
+});
+
 test("report preview opens the generated PDF in a new window", async ({ page }) => {
   await page.goto("/reports");
   await page.getByLabel("登录邮箱").fill("admin@demo.local");
