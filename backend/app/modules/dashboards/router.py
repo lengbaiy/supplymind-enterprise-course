@@ -268,6 +268,8 @@ async def refresh_status(
         "celery_task_id": task.celery_task_id,
         "filters": task.filters,
         "error_message": task.error_message,
+        "attempts": task.attempts,
+        "max_attempts": task.max_attempts,
         "started_at": task.started_at,
         "finished_at": task.finished_at,
         "recent_success_at": recent_success_at,

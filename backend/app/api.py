@@ -2864,17 +2864,25 @@ async def export_report_pdf(
         task = celery_app.send_task("supplymind.reports.export_pdf", args=[export.id])
         export.celery_task_id = task.id
     else:
-        directory = Path(get_settings().report_directory)
-        directory.mkdir(parents=True, exist_ok=True)
-        export.file_path = str(directory / f"{report.id}-{export.id}.pdf")
-        render_pdf(report.markdown, export.file_path)
-        export.checksum_sha256 = sha256_digest(Path(export.file_path).read_bytes()).hexdigest()
-        export.object_key = f"{export.tenant_id}/reports/{report.id}/{export.id}.pdf"
-        put_file(export.file_path, export.object_key)
-        export.storage_backend = "s3" if storage_configured() else "local"
-        if export.storage_backend == "s3":
-            export.file_path = None
-        export.status = "completed"
+        export.attempts = 1
+        export.started_at = datetime.now(UTC)
+        try:
+            directory = Path(get_settings().report_directory)
+            directory.mkdir(parents=True, exist_ok=True)
+            export.file_path = str(directory / f"{report.id}-{export.id}.pdf")
+            render_pdf(report.markdown, export.file_path)
+            export.checksum_sha256 = sha256_digest(Path(export.file_path).read_bytes()).hexdigest()
+            export.object_key = f"{export.tenant_id}/reports/{report.id}/{export.id}.pdf"
+            put_file(export.file_path, export.object_key)
+            export.storage_backend = "s3" if storage_configured() else "local"
+            if export.storage_backend == "s3":
+                export.file_path = None
+            export.status = "completed"
+        except (OSError, RuntimeError, ValueError) as exc:
+            export.status = "failed"
+            export.error_message = f"PDF 导出失败：{str(exc)[:800]}"
+        finally:
+            export.finished_at = datetime.now(UTC)
     await audit(
         session,
         principal.tenant_id,
@@ -2937,7 +2945,7 @@ async def retry_report_export(
     ),
     session: AsyncSession = Depends(get_session),
 ) -> ReportExport:
-    await get_tenant_report(session, report_id, principal.tenant_id)
+    report = await get_tenant_report(session, report_id, principal.tenant_id)
     export = await session.scalar(
         select(ReportExport).where(
             ReportExport.id == export_id,
@@ -2950,6 +2958,7 @@ async def retry_report_export(
     if export.status != "failed":
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前导出任务不可重试")
     export.status = "queued"
+    export.finished_at = None
     export.error_message = None
     export.file_path = None
     export.object_key = None
@@ -2958,6 +2967,26 @@ async def retry_report_export(
 
         task = celery_app.send_task("supplymind.reports.export_pdf", args=[export.id])
         export.celery_task_id = task.id
+    else:
+        export.attempts += 1
+        export.started_at = datetime.now(UTC)
+        try:
+            directory = Path(get_settings().report_directory)
+            directory.mkdir(parents=True, exist_ok=True)
+            export.file_path = str(directory / f"{report_id}-{export.id}.pdf")
+            render_pdf(report.markdown, export.file_path)
+            export.checksum_sha256 = sha256_digest(Path(export.file_path).read_bytes()).hexdigest()
+            export.object_key = f"{export.tenant_id}/reports/{report_id}/{export.id}.pdf"
+            put_file(export.file_path, export.object_key)
+            export.storage_backend = "s3" if storage_configured() else "local"
+            if export.storage_backend == "s3":
+                export.file_path = None
+            export.status = "completed"
+        except (OSError, RuntimeError, ValueError) as exc:
+            export.status = "failed"
+            export.error_message = f"PDF 导出失败：{str(exc)[:800]}"
+        finally:
+            export.finished_at = datetime.now(UTC)
     await audit(
         session,
         principal.tenant_id,
@@ -3210,6 +3239,7 @@ async def sync_data_source(
         data_source_id=source.id,
         created_by=principal.user_id,
         status="running",
+        attempts=1,
         started_at=datetime.now(UTC),
     )
     session.add(task)
@@ -3833,6 +3863,8 @@ async def cancel_analysis(
     if run.status not in {"queued", "running"}:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前运行不可取消")
     run.status = "cancelled"
+    run.finished_at = datetime.now(UTC)
+    run.error_message = "分析已由用户取消"
     await audit(
         session,
         principal.tenant_id,

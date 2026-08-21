@@ -82,7 +82,7 @@ services:
       minio: { condition: service_healthy }
   api:
     build: ./backend
-    env_file: .env
+    env_file: ${SUPPLYMIND_ENV_FILE:-.env}
     environment:
       SUPPLYMIND_DATABASE_URL: postgresql+psycopg://supplymind:supplymind@postgres:5432/supplymind
       SUPPLYMIND_REDIS_URL: redis://redis:6379/0
@@ -113,7 +113,7 @@ services:
   worker:
     build: ./backend
     command: celery -A scripts.worker.celery_app worker --loglevel=INFO --queues=analysis
-    env_file: .env
+    env_file: ${SUPPLYMIND_ENV_FILE:-.env}
     environment:
       SUPPLYMIND_DATABASE_URL: postgresql+psycopg://supplymind:supplymind@postgres:5432/supplymind
       SUPPLYMIND_REDIS_URL: redis://redis:6379/0

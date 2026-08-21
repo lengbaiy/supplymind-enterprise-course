@@ -1,6 +1,6 @@
 import json
 from collections.abc import AsyncGenerator
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 
 from sqlalchemy import select
@@ -97,12 +97,25 @@ class AnalysisService:
             knowledge_base_id=request.knowledge_base_id,
             question=request.question,
             status="running",
+            started_at=datetime.now(UTC),
             idempotency_key=idempotency_key,
             retry_of_id=retry_of_id,
         )
         session.add(run)
         await session.flush()
         await session.commit()
+
+        async def fail(message: str) -> None:
+            """Persist a terminal failure before the SSE generator returns.
+
+            A streaming connection can be interrupted by the browser or proxy at
+            any point.  Keeping the terminal state on the run makes refresh and
+            reconnect deterministic instead of leaving an eternal "running"
+            record behind.
+            """
+            run.status = "failed"
+            run.error_message = message[:1000]
+            run.finished_at = datetime.now(UTC)
 
         async def was_cancelled() -> bool:
             await session.refresh(run, attribute_names=["status"])
@@ -186,7 +199,7 @@ class AnalysisService:
                     request.knowledge_base_id,
                     {"reason": str(exc)},
                 )
-                run.status = "failed"
+                await fail(f"Knowledge retrieval failed: {exc}")
                 await session.commit()
                 yield self.event("failed", {"message": f"Knowledge retrieval failed: {exc}"})
                 return
@@ -213,7 +226,7 @@ class AnalysisService:
         try:
             plan = await self.client.plan_sql(request.question, schema_context, request.context)
         except (ModelConfigurationError, ModelResponseError) as exc:
-            run.status = "failed"
+            await fail(str(exc))
             await audit(
                 session,
                 principal.tenant_id,
@@ -249,7 +262,7 @@ class AnalysisService:
                 candidate, set(source.allowed_tables), get_settings().sql_max_rows
             )
         except SQLGuardError as exc:
-            run.status = "failed"
+            await fail(str(exc))
             run.guard_error = str(exc)
             await audit(
                 session,
@@ -320,7 +333,7 @@ class AnalysisService:
                         query_error = repair_exc
                 break
         if query_error is not None or query_tool is None:
-            run.status = "failed"
+            await fail("Read-only query execution failed")
             await audit(
                 session,
                 principal.tenant_id,
@@ -337,7 +350,22 @@ class AnalysisService:
         if cancelled:
             yield cancel_event
             return
-        chart = await tools.call("chart.render", principal.role, {"rows": rows})
+        try:
+            chart = await tools.call("chart.render", principal.role, {"rows": rows})
+        except (RuntimeError, OSError) as exc:
+            await fail(f"图表生成失败：{exc}")
+            await audit(
+                session,
+                principal.tenant_id,
+                principal.user_id,
+                "analysis.chart_failed",
+                "analysis_run",
+                run.id,
+                {"reason": str(exc)[:500]},
+            )
+            await session.commit()
+            yield self.event("failed", {"message": "图表生成失败，请稍后重试"})
+            return
         # Keep model text intact while exposing a stable, auditable result contract.
         # Facts are only populated from the model response and observed query rows;
         # no conclusion is manufactured when the query is empty.
@@ -354,7 +382,7 @@ class AnalysisService:
                 self.client,
             )
         except (ModelConfigurationError, ModelResponseError) as exc:
-            run.status = "failed"
+            await fail("答案生成失败，请稍后重试")
             await audit(
                 session,
                 principal.tenant_id,
@@ -368,8 +396,9 @@ class AnalysisService:
             yield self.event("failed", {"message": "答案生成失败，请稍后重试"})
             return
         if not graph_state.get("verified"):
-            run.status = "failed"
-            run.guard_error = graph_state.get("verification_error")
+            verification_error = graph_state.get("verification_error") or "答案校验失败"
+            await fail(verification_error)
+            run.guard_error = verification_error
             await session.commit()
             yield self.event(
                 "failed", {"message": graph_state.get("verification_error") or "答案校验失败"}
@@ -430,6 +459,8 @@ class AnalysisService:
             )
         )
         run.status = "completed"
+        run.finished_at = datetime.now(UTC)
+        run.error_message = None
         run.sql = guarded.sql
         run.result = result
         markdown, citations = render_markdown(run)

@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from pathlib import Path
 from time import monotonic
 
@@ -15,6 +16,8 @@ async def process_ingestion(session: AsyncSession, task: IngestionTask, document
     started = monotonic()
     task.status = "processing"
     task.attempts += 1
+    task.started_at = datetime.now(UTC)
+    task.finished_at = None
     document.status = "processing"
     await session.flush()
     try:
@@ -73,3 +76,4 @@ async def process_ingestion(session: AsyncSession, task: IngestionTask, document
         raise
     finally:
         task.elapsed_ms = int((monotonic() - started) * 1000)
+        task.finished_at = datetime.now(UTC)

@@ -117,9 +117,14 @@ async def reconcile_stalled_tasks(
         await session.scalars(select(AnalysisRun).where(AnalysisRun.status.in_(["queued", "running"])))
     )
     for run in analysis_runs:
-        if not _expired(run.created_at, running_cutoff):
+        reference = run.started_at if run.status == "running" else None
+        reference = reference or run.created_at
+        cutoff = running_cutoff if run.status == "running" else queued_cutoff
+        if not _expired(reference, cutoff):
             continue
         run.status = "failed"
+        run.finished_at = now
+        run.error_message = "分析运行超时或连接中断，请重试。"
         result = dict(run.result or {})
         result["error"] = "分析运行超时或连接中断，请重试。"
         result["failure_reason"] = "watchdog_timeout"

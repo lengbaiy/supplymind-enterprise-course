@@ -64,7 +64,9 @@ def sync_datasource_schema(self, task_id: str) -> str:
                 await session.commit()
                 return
             task.status = "running"
+            task.attempts += 1
             task.started_at = datetime.now(UTC)
+            task.finished_at = None
             source.status = "syncing"
             await session.commit()
             try:
@@ -117,7 +119,9 @@ def refresh_dashboard(
             )
             if task:
                 task.status = "running"
+                task.attempts += 1
                 task.started_at = datetime.now(UTC)
+                task.finished_at = None
                 task.celery_task_id = self.request.id
                 await session.commit()
             try:
@@ -178,6 +182,9 @@ def export_report_pdf(self, export_id: str) -> str:
                 return
             report = await session.scalar(select(Report).where(Report.id == export.report_id))
             export.status = "running"
+            export.attempts += 1
+            export.started_at = datetime.now(UTC)
+            export.finished_at = None
             export.celery_task_id = self.request.id
             await session.commit()
             if not report:
@@ -202,6 +209,7 @@ def export_report_pdf(self, export_id: str) -> str:
                 except (OSError, RuntimeError, ValueError) as exc:
                     export.status = "failed"
                     export.error_message = str(exc)[:500]
+            export.finished_at = datetime.now(UTC)
             await session.commit()
 
     asyncio.run(run())

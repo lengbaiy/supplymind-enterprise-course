@@ -190,6 +190,8 @@ class DataSourceSyncTaskView(BaseModel):
     id: str
     data_source_id: str
     status: str
+    attempts: int = 0
+    max_attempts: int = 3
     started_at: datetime | None = None
     finished_at: datetime | None = None
     error_message: str | None = None
@@ -324,6 +326,11 @@ class AnalysisView(BaseModel):
     rewrite_count: int = 0
     idempotency_key: str | None = None
     retry_of_id: str | None = None
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+    attempts: int = 1
+    max_attempts: int = 3
+    error_message: str | None = None
     result: dict | None
     created_at: datetime
 
@@ -422,6 +429,8 @@ class IngestionTaskView(BaseModel):
     elapsed_ms: int | None = None
     celery_task_id: str | None
     error_message: str | None
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -458,6 +467,10 @@ class ReportExportView(BaseModel):
     report_id: str
     format: str
     status: str
+    attempts: int = 0
+    max_attempts: int = 3
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
     error_message: str | None
     checksum_sha256: str | None
     object_key: str | None = None

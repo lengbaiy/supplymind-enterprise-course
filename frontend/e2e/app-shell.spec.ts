@@ -180,5 +180,5 @@ test("administrator receives a streamed analysis conclusion from active resource
   await expect(page.getByText("任务已创建")).toBeVisible({ timeout: 10_000 });
   await expect(page.getByText("结论已生成")).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText("分析完成")).toBeVisible();
-  await expect(page.getByText(/已验证 \d+ 条结果/)).toBeVisible();
+  await expect(page.getByText(/已验证 \d+ 条结果/).first()).toBeVisible();
 });

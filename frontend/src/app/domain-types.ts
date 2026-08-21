@@ -21,10 +21,10 @@ export type Report = {
   analysis_sql_draft?: string; analysis_result?: Record<string, unknown>;
   data_source_id?: string; knowledge_base_id?: string;
 };
-export type ReportExport = { id: string; format: string; status: string; error_message?: string; created_at: string; updated_at: string };
+export type ReportExport = { id: string; format: string; status: string; error_message?: string; attempts?: number; max_attempts?: number; started_at?: string; finished_at?: string; created_at: string; updated_at: string };
 export type AnalysisRun = {
   id: string; status: string; question: string; data_source_id?: string; knowledge_base_id?: string;
-  sql?: string; sql_draft?: string; guard_error?: string; result?: Record<string, unknown>; created_at: string;
+  sql?: string; sql_draft?: string; guard_error?: string; error_message?: string; attempts?: number; max_attempts?: number; started_at?: string; finished_at?: string; result?: Record<string, unknown>; created_at: string;
 };
 export type AgentStep = {
   id: string; name: string; status: string; input_summary: string; output: Record<string, unknown>;
