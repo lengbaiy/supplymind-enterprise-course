@@ -14,6 +14,21 @@ const DataSourcesRoute = lazy(() =>
 const OperationsOverviewRoute = lazy(() =>
   import("../features/dashboards/OperationsOverviewRoute").then((module) => ({ default: module.OperationsOverviewRoute })),
 );
+const ReportsRoute = lazy(() =>
+  import("../features/reports/ReportsRoute").then((module) => ({ default: module.ReportsRoute })),
+);
+const SystemStatusRoute = lazy(() =>
+  import("../features/system/SystemStatusRoute").then((module) => ({ default: module.SystemStatusRoute })),
+);
+const DashboardConfigurationRoute = lazy(() =>
+  import("../features/dashboards/DashboardConfigurationRoute").then((module) => ({ default: module.DashboardConfigurationRoute })),
+);
+const ProjectManagementRoute = lazy(() =>
+  import("../features/projects/ProjectManagementRoute").then((module) => ({ default: module.ProjectManagementRoute })),
+);
+const PlatformOrganizationsRoute = lazy(() =>
+  import("../features/system/PlatformOrganizationsRoute").then((module) => ({ default: module.PlatformOrganizationsRoute })),
+);
 
 export const NAV_PATHS: Record<NavItem, string> = {
   "运营总览": "/overview",
@@ -43,8 +58,13 @@ export function AppRoutes() {
       <Route path="/analysis" element={<Suspense fallback={<RouteLoading />}><AnalysisRoute /></Suspense>} />
       <Route path="/data-sources" element={<Suspense fallback={<RouteLoading />}><DataSourcesRoute /></Suspense>} />
       <Route path="/overview" element={<Suspense fallback={<RouteLoading />}><OperationsOverviewRoute /></Suspense>} />
+      <Route path="/reports" element={<Suspense fallback={<RouteLoading />}><ReportsRoute /></Suspense>} />
+      <Route path="/system-status" element={<Suspense fallback={<RouteLoading />}><SystemStatusRoute /></Suspense>} />
+      <Route path="/dashboard/configuration" element={<Suspense fallback={<RouteLoading />}><DashboardConfigurationRoute /></Suspense>} />
+      <Route path="/project" element={<Suspense fallback={<RouteLoading />}><ProjectManagementRoute /></Suspense>} />
+      <Route path="/platform/organizations" element={<Suspense fallback={<RouteLoading />}><PlatformOrganizationsRoute /></Suspense>} />
       {NAV_ITEMS.map((item) => {
-        if (item === "运营总览" || item === "分析会话" || item === "数据源") return null;
+        if (item === "运营总览" || item === "项目管理" || item === "企业管理" || item === "分析会话" || item === "数据源" || item === "报告中心" || item === "系统状态" || item === "大屏配置") return null;
         const Page = legacyRoute(item);
         return <Route key={item} path={NAV_PATHS[item]} element={<Page />} />;
       })}
