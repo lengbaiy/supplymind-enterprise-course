@@ -3,7 +3,9 @@ from functools import lru_cache
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DEVELOPMENT_JWT_SECRET = "development-only-change-me-please-change-me"
-DEVELOPMENT_CREDENTIAL_KEY = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
+# Valid Fernet material, deliberately all-zero so it is unmistakably a local-only
+# placeholder and cannot be mistaken for a deployable credential.
+DEVELOPMENT_CREDENTIAL_KEY = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
 
 
 class Settings(BaseSettings):

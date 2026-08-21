@@ -1,0 +1,8 @@
+# The historical value below was an intentionally public development-only
+# Fernet placeholder.  It is neither used by trial deployment nor accepted
+# there; keep this exact allowlist narrow so CI still fails on real secrets.
+[allowlist]
+description = "Retired local development Fernet placeholder"
+regexes = [
+  '''MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=''',
+]
