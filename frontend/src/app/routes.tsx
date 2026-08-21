@@ -1,10 +1,7 @@
-import { lazy, Suspense, type ComponentType } from "react";
+import { lazy, Suspense } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
-import { NAV_ITEMS, type NavItem } from "./navigation";
+import { type NavItem } from "./navigation";
 
-const LegacyConsole = lazy(() =>
-  import("../features/legacy/LegacyConsole").then((module) => ({ default: module.LegacyConsole })),
-);
 const AnalysisRoute = lazy(() =>
   import("../features/analysis/AnalysisRoute").then((module) => ({ default: module.AnalysisRoute })),
 );
@@ -29,6 +26,12 @@ const ProjectManagementRoute = lazy(() =>
 const PlatformOrganizationsRoute = lazy(() =>
   import("../features/system/PlatformOrganizationsRoute").then((module) => ({ default: module.PlatformOrganizationsRoute })),
 );
+const OrganizationAuditRoute = lazy(() =>
+  import("../features/identity/OrganizationAuditRoute").then((module) => ({ default: module.OrganizationAuditRoute })),
+);
+const KnowledgeRoute = lazy(() =>
+  import("../features/knowledge/KnowledgeRoute").then((module) => ({ default: module.KnowledgeRoute })),
+);
 
 export const NAV_PATHS: Record<NavItem, string> = {
   "运营总览": "/overview",
@@ -42,10 +45,6 @@ export const NAV_PATHS: Record<NavItem, string> = {
   "组织与审计": "/audit",
   "系统状态": "/system-status",
 };
-
-function legacyRoute(item: NavItem): ComponentType {
-  return () => <Suspense fallback={<RouteLoading />}><LegacyConsole initialNav={item} /></Suspense>;
-}
 
 function RouteLoading() {
   return <main className="route-loading" role="status">正在加载工作区…</main>;
@@ -63,11 +62,8 @@ export function AppRoutes() {
       <Route path="/dashboard/configuration" element={<Suspense fallback={<RouteLoading />}><DashboardConfigurationRoute /></Suspense>} />
       <Route path="/project" element={<Suspense fallback={<RouteLoading />}><ProjectManagementRoute /></Suspense>} />
       <Route path="/platform/organizations" element={<Suspense fallback={<RouteLoading />}><PlatformOrganizationsRoute /></Suspense>} />
-      {NAV_ITEMS.map((item) => {
-        if (item === "运营总览" || item === "项目管理" || item === "企业管理" || item === "分析会话" || item === "数据源" || item === "报告中心" || item === "系统状态" || item === "大屏配置") return null;
-        const Page = legacyRoute(item);
-        return <Route key={item} path={NAV_PATHS[item]} element={<Page />} />;
-      })}
+      <Route path="/audit" element={<Suspense fallback={<RouteLoading />}><OrganizationAuditRoute /></Suspense>} />
+      <Route path="/knowledge" element={<Suspense fallback={<RouteLoading />}><KnowledgeRoute /></Suspense>} />
       <Route path="*" element={<Navigate to={NAV_PATHS["运营总览"]} replace />} />
     </Routes>
   );
