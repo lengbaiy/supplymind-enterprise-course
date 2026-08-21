@@ -102,6 +102,29 @@ test("second organization only sees its own resources in the browser", async ({ 
   await expect(page.getByText("示范制造集团 · POSTGRESQL 演示库")).toHaveCount(0);
 });
 
+test("organization administrator creates, copies, and revokes an invitation", async ({ page }) => {
+  const email = `invite-e2e-${Date.now()}@example.com`;
+  await page.goto("/audit");
+  await page.getByLabel("登录邮箱").fill("admin@demo.local");
+  await page.getByLabel("登录密码").fill("ChangeMe123!");
+  await page.getByLabel("组织标识").fill("demo-factory");
+  await page.getByRole("button", { name: "登录工作区" }).click();
+  await expect(page.getByRole("heading", { name: "运营总览" })).toBeVisible({ timeout: 15_000 });
+  await page.getByRole("navigation", { name: "主导航" }).getByRole("button", { name: "组织与审计" }).click();
+  await page.getByLabel("成员邮箱").fill(email);
+  await page.getByLabel("成员角色").selectOption("analyst");
+  await page.getByRole("button", { name: /发送邀请/ }).click();
+  const linkDialog = page.getByRole("dialog", { name: "复制一次性邀请链接" });
+  await expect(linkDialog.getByLabel("一次性邀请链接")).toBeVisible({ timeout: 15_000 });
+  await linkDialog.getByRole("button", { name: "关闭" }).click();
+  await page.getByRole("tab", { name: /邀请管理/ }).click();
+  const invitation = page.locator(".invitation-row", { hasText: email });
+  await expect(invitation).toBeVisible();
+  await invitation.getByRole("button", { name: "撤销邀请" }).click();
+  await page.getByRole("button", { name: "确认撤销" }).click();
+  await expect(invitation).toContainText("已撤销");
+});
+
 test("administrator can inspect the real operational resource paths", async ({ page }) => {
   await page.goto("/overview");
   await page.getByLabel("登录邮箱").fill("admin@demo.local");
