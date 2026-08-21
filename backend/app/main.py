@@ -144,6 +144,43 @@ async def seed_demo_data() -> None:
                                 allowed_tables=tables,
                             )
                         )
+                for source in list(
+                    await session.scalars(
+                        select(DataSource).where(
+                            DataSource.tenant_id == organization.id,
+                            DataSource.host == "demo-postgres",
+                        )
+                    )
+                ):
+                    source.allowed_tables = base_tables + [
+                        "manufacturing_quality_events",
+                        "steel_plate_defects",
+                    ]
+                    source.status = "active"
+                retail_source = await session.scalar(
+                    select(DataSource).where(
+                        DataSource.tenant_id == organization.id,
+                        DataSource.host == "retail-postgres",
+                    )
+                )
+                if retail_source:
+                    retail_source.name = "UCI 在线零售真实数据"
+                    retail_source.allowed_tables = ["retail_transactions"]
+                    retail_source.status = "active"
+                else:
+                    session.add(
+                        DataSource(
+                            tenant_id=organization.id,
+                            name="UCI 在线零售真实数据",
+                            engine="postgresql",
+                            host="retail-postgres",
+                            port=5432,
+                            database_name="online_retail",
+                            username="supplymind_ro",
+                            encrypted_password=encrypt_secret("supplymind-demo-ro"),
+                            allowed_tables=["retail_transactions"],
+                        )
+                    )
             await session.commit()
             return
         organizations = [
@@ -231,6 +268,19 @@ async def seed_demo_data() -> None:
                         allowed_tables=tables,
                     )
                 )
+            session.add(
+                DataSource(
+                    tenant_id=organization.id,
+                    name="UCI 在线零售真实数据",
+                    engine="postgresql",
+                    host="retail-postgres",
+                    port=5432,
+                    database_name="online_retail",
+                    username="supplymind_ro",
+                    encrypted_password=encrypt_secret("supplymind-demo-ro"),
+                    allowed_tables=["retail_transactions"],
+                )
+            )
         await session.commit()
 
 

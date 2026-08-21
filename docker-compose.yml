@@ -34,6 +34,18 @@ services:
       interval: 5s
       timeout: 5s
       retries: 12
+  retail-postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: online_retail
+      POSTGRES_USER: supplymind_ro
+      POSTGRES_PASSWORD: supplymind-demo-ro
+    volumes: [retail_postgres_data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U supplymind_ro -d online_retail"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
   demo-mysql:
     image: mysql:8.4
     environment:
@@ -91,6 +103,7 @@ services:
       redis: { condition: service_started }
       minio: { condition: service_healthy }
       demo-postgres: { condition: service_healthy }
+      retail-postgres: { condition: service_healthy }
       demo-mysql: { condition: service_healthy }
   worker:
     build: ./backend
@@ -151,4 +164,5 @@ volumes:
   documents_data:
   reports_data:
   demo_postgres_data:
+  retail_postgres_data:
   demo_mysql_data:

@@ -69,6 +69,7 @@ async def update_supply_chain_dashboard_config(
         "product_lines",
         "suppliers",
         "anomalies",
+        "retail",
     }
     visible = list(dict.fromkeys(payload.visible_widgets))
     unknown = [key for key in visible if key not in allowed]

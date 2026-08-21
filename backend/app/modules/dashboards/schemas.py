@@ -16,6 +16,7 @@ class DashboardView(BaseModel):
     trend: list[dict[str, Any]]
     rankings: dict[str, list[dict[str, Any]]] = {}
     anomalies: list[dict[str, Any]] = []
+    retail: dict[str, Any] | None = None
 
 
 class DashboardConfigView(BaseModel):

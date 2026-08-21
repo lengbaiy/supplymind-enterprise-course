@@ -225,6 +225,9 @@ def test_knowledge_lifecycle_archive_and_retry(monkeypatch, tmp_path: Path) -> N
         base = client.post(
             "/api/v1/knowledge-bases", headers=headers, json={"name": "生命周期库"}
         ).json()
+        assert client.delete(
+            f"/api/v1/knowledge-bases/{base['id']}", headers=headers
+        ).status_code == 409
         upload = client.post(
             f"/api/v1/knowledge-bases/{base['id']}/documents",
             headers=headers,
@@ -243,7 +246,16 @@ def test_knowledge_lifecycle_archive_and_retry(monkeypatch, tmp_path: Path) -> N
         )
         assert archived_base.status_code == 200
         assert archived_base.json()["is_archived"] is True
-        assert (
-            client.delete(f"/api/v1/knowledge-bases/{base['id']}", headers=headers).status_code
-            == 204
-        )
+        delete = client.delete(f"/api/v1/knowledge-bases/{base['id']}", headers=headers)
+        assert delete.status_code == 409
+        assert "包含文档" in delete.json()["detail"]
+
+        empty_base = client.post(
+            "/api/v1/knowledge-bases", headers=headers, json={"name": "可永久删除空库"}
+        ).json()
+        assert client.post(
+            f"/api/v1/knowledge-bases/{empty_base['id']}/archive", headers=headers
+        ).status_code == 200
+        assert client.delete(
+            f"/api/v1/knowledge-bases/{empty_base['id']}", headers=headers
+        ).status_code == 204

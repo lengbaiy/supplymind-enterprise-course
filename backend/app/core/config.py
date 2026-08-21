@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     sql_timeout_seconds: int = 15
     sql_max_rows: int = 500
     refresh_token_days: int = 14
-    datasource_allowed_hosts: str = "localhost,127.0.0.1,demo-data,demo-postgres,demo-mysql"
+    datasource_allowed_hosts: str = "localhost,127.0.0.1,demo-data,demo-postgres,demo-mysql,retail-postgres"
     datasource_allowed_cidrs: str = "127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
     chat_base_url: str | None = None
     chat_model: str | None = None

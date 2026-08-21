@@ -1,9 +1,16 @@
-import type { ComponentType } from "react";
+import { lazy, Suspense, type ComponentType } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
-import { LegacyConsole } from "../features/legacy/LegacyConsole";
-import { AnalysisRoute } from "../features/analysis/AnalysisRoute";
-import { DataSourcesRoute } from "../features/datasources/DataSourcesRoute";
 import { NAV_ITEMS, type NavItem } from "./navigation";
+
+const LegacyConsole = lazy(() =>
+  import("../features/legacy/LegacyConsole").then((module) => ({ default: module.LegacyConsole })),
+);
+const AnalysisRoute = lazy(() =>
+  import("../features/analysis/AnalysisRoute").then((module) => ({ default: module.AnalysisRoute })),
+);
+const DataSourcesRoute = lazy(() =>
+  import("../features/datasources/DataSourcesRoute").then((module) => ({ default: module.DataSourcesRoute })),
+);
 
 export const NAV_PATHS: Record<NavItem, string> = {
   "运营总览": "/overview",
@@ -19,15 +26,19 @@ export const NAV_PATHS: Record<NavItem, string> = {
 };
 
 function legacyRoute(item: NavItem): ComponentType {
-  return () => <LegacyConsole initialNav={item} />;
+  return () => <Suspense fallback={<RouteLoading />}><LegacyConsole initialNav={item} /></Suspense>;
+}
+
+function RouteLoading() {
+  return <main className="route-loading" role="status">正在加载工作区…</main>;
 }
 
 export function AppRoutes() {
   return (
     <Routes>
       <Route path="/" element={<Navigate to={NAV_PATHS["运营总览"]} replace />} />
-      <Route path="/analysis" element={<AnalysisRoute />} />
-      <Route path="/data-sources" element={<DataSourcesRoute />} />
+      <Route path="/analysis" element={<Suspense fallback={<RouteLoading />}><AnalysisRoute /></Suspense>} />
+      <Route path="/data-sources" element={<Suspense fallback={<RouteLoading />}><DataSourcesRoute /></Suspense>} />
       {NAV_ITEMS.map((item) => {
         if (item === "分析会话" || item === "数据源") return null;
         const Page = legacyRoute(item);

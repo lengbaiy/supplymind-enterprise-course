@@ -116,12 +116,85 @@ async def _live_payload(
 
     def clean_row(row: dict[str, Any]) -> dict[str, Any]:
         return {
-            key: float(value) if isinstance(value, Decimal) else value for key, value in row.items()
+            key: (
+                float(value)
+                if isinstance(value, Decimal)
+                else value.isoformat()
+                if isinstance(value, datetime)
+                else value
+            )
+            for key, value in row.items()
         }
 
     factory_rows = [clean_row(row) for row in factory_rows]
     product_rows = [clean_row(row) for row in product_rows]
     supplier_rows = [clean_row(row) for row in supplier_rows]
+    retail: dict[str, Any] | None = None
+    retail_source = await session.scalar(
+        select(DataSource).where(
+            DataSource.tenant_id == tenant_id,
+            DataSource.host == "retail-postgres",
+            DataSource.status == "active",
+        )
+    )
+    if retail_source and "retail_transactions" in set(retail_source.allowed_tables or []):
+        retail_summary_sql = """
+            SELECT COUNT(*) AS transaction_rows, COUNT(DISTINCT invoice_no) AS order_count,
+              COUNT(DISTINCT stock_code) AS sku_count, COUNT(DISTINCT country) AS country_count,
+              MIN(invoice_at) AS first_transaction_at, MAX(invoice_at) AS last_transaction_at,
+              COALESCE(SUM(quantity * unit_price), 0) AS net_transaction_value
+            FROM retail_transactions
+        """
+        retail_recent_sql = """
+            WITH latest AS (SELECT MAX(invoice_at) AS end_at FROM retail_transactions)
+            SELECT COUNT(*) AS transaction_rows,
+              COALESCE(SUM(quantity * unit_price), 0) AS net_transaction_value,
+              MIN(invoice_at) AS start_at, MAX(invoice_at) AS end_at
+            FROM retail_transactions, latest
+            WHERE invoice_at >= latest.end_at - INTERVAL '30 days'
+        """
+        retail_markets_sql = """
+            WITH latest AS (SELECT MAX(invoice_at) AS end_at FROM retail_transactions)
+            SELECT country, COUNT(*) AS transaction_rows,
+              COALESCE(SUM(quantity * unit_price), 0) AS net_transaction_value
+            FROM retail_transactions, latest
+            WHERE invoice_at >= latest.end_at - INTERVAL '30 days'
+            GROUP BY country
+            ORDER BY net_transaction_value DESC
+            LIMIT 3
+        """
+        try:
+            _, retail_rows = await execute_guarded_query(retail_source, retail_summary_sql)
+            _, recent_rows = await execute_guarded_query(retail_source, retail_recent_sql)
+            _, market_rows = await execute_guarded_query(retail_source, retail_markets_sql)
+        except Exception:
+            retail_rows, recent_rows, market_rows = [], [], []
+        if not retail_rows:
+            return_payload = None
+        else:
+            return_payload = retail_rows[0]
+        summary = return_payload or {}
+        recent = recent_rows[0] if recent_rows else {}
+        retail = {
+            "source": "UCI Online Retail II",
+            "transaction_rows": int(summary.get("transaction_rows") or 0),
+            "order_count": int(summary.get("order_count") or 0),
+            "sku_count": int(summary.get("sku_count") or 0),
+            "country_count": int(summary.get("country_count") or 0),
+            "net_transaction_value": float(summary.get("net_transaction_value") or 0),
+            "first_transaction_at": (
+                summary["first_transaction_at"].isoformat()
+                if summary.get("first_transaction_at")
+                else None
+            ),
+            "last_transaction_at": (
+                summary["last_transaction_at"].isoformat()
+                if summary.get("last_transaction_at")
+                else None
+            ),
+            "latest_30_days": clean_row(recent),
+            "top_markets": [clean_row(row) for row in market_rows],
+        }
     return {
         "cards": [
             {"label": "采购交付", "value": f"{delivery:.1f}%", "change": "实时"},
@@ -139,6 +212,7 @@ async def _live_payload(
             "suppliers": supplier_rows,
         },
         "anomalies": anomalies,
+        "retail": retail,
     }
 
 

@@ -56,3 +56,16 @@ fixtures and can be rerun safely:
 ```powershell
 docker compose exec -T api python -m scripts.import_uci_secom
 ```
+
+## Verified public transaction data
+
+The UCI Online Retail II importer downloads the official Excel archive and loads
+more than one million real, anonymized retail transaction rows into
+`retail_transactions`. It is a separate analysis table: retail customers,
+countries, and stock codes are not misrepresented as the teaching factory's
+suppliers, factories, or work orders. Re-running it is idempotent by source-row
+identifier.
+
+```powershell
+docker compose exec -T api python -m scripts.import_uci_online_retail
+```

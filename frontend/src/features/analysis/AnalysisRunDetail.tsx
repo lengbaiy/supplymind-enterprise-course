@@ -1,8 +1,125 @@
-import type { AgentStep, AnalysisRun, KnowledgeBase, Source } from "../../app/domain-types";
+import type {
+  AgentStep,
+  AnalysisRun,
+  KnowledgeBase,
+  Source,
+} from "../../app/domain-types";
 
-type Props = { run: AnalysisRun; steps: AgentStep[]; sources: Source[]; knowledgeBases: KnowledgeBase[]; busy: boolean; onClose: () => void; onCancel: (id: string) => void; onRetry: (id: string) => void };
-export function AnalysisRunDetail({ run, steps, sources, knowledgeBases, busy, onClose, onCancel, onRetry }: Props) {
+type Props = {
+  run: AnalysisRun;
+  steps: AgentStep[];
+  sources: Source[];
+  knowledgeBases: KnowledgeBase[];
+  busy: boolean;
+  onClose: () => void;
+  onStartNew: () => void;
+  onCancel: (id: string) => void;
+  onRetry: (id: string) => void;
+};
+export function AnalysisRunDetail({
+  run,
+  steps,
+  sources,
+  knowledgeBases,
+  busy,
+  onClose,
+  onStartNew,
+  onCancel,
+  onRetry,
+}: Props) {
   const source = sources.find((item) => item.id === run.data_source_id);
-  const knowledgeBase = knowledgeBases.find((item) => item.id === run.knowledge_base_id);
-  return <section className="detail-panel analysis-run-detail"><div className="panel-heading"><div><h3>{run.question}</h3><p className="panel-meta">运行状态：{run.status}</p></div><button className="text-button analysis-session-close" onClick={onClose}>关闭</button></div><div className="detail-meta"><span>运行 ID：{run.id}</span><span>数据源：{source?.name || run.data_source_id || "-"}</span><span>知识库：{knowledgeBase?.name || run.knowledge_base_id || "-"}</span><span>创建时间：{new Date(run.created_at).toLocaleString("zh-CN")}</span></div><div className="row-actions analysis-actions">{["running", "queued"].includes(run.status) && <button className="secondary-button" onClick={() => onCancel(run.id)}>取消分析</button>}{["failed", "cancelled"].includes(run.status) && <button className="primary-button" onClick={() => onRetry(run.id)} disabled={busy}>重试分析</button>}</div>{run.sql_draft && <details className="result-detail"><summary>SQL 草案</summary><pre className="sql-preview">{run.sql_draft}</pre></details>}{run.sql && <details className="result-detail"><summary>最终 SQL</summary><pre className="sql-preview">{run.sql}</pre></details>}{run.guard_error && <p className="form-error">SQL Guard：{run.guard_error}</p>}{run.result && <details className="result-detail"><summary>查询结果摘要</summary><pre className="schema-preview">{JSON.stringify(run.result, null, 2)}</pre></details>}<section className="analysis-run-steps"><div className="panel-heading"><strong>运行轨迹</strong><span className="panel-meta">{steps.length} 个步骤</span></div><div className="step-timeline">{steps.map((step) => <article className="step-item" key={step.id}><span className={`status-dot-label ${step.status}`}>{step.status}</span><div><strong>{step.name}</strong><p>{step.input_summary}</p>{step.error_message && <small>{step.error_message}</small>}</div><time>{step.elapsed_ms ? `${step.elapsed_ms} ms` : "-"}</time></article>)}</div></section></section>;
+  const knowledgeBase = knowledgeBases.find(
+    (item) => item.id === run.knowledge_base_id,
+  );
+  return (
+    <section className="detail-panel analysis-run-detail">
+      <div className="panel-heading">
+        <div>
+          <h3>{run.question}</h3>
+          <p className="panel-meta">运行状态：{run.status}</p>
+        </div>
+        <div className="analysis-run-actions">
+          <button className="secondary-button" onClick={onStartNew}>
+            新建分析
+          </button>
+          <button
+            className="text-button analysis-session-close"
+            onClick={onClose}
+          >
+            关闭
+          </button>
+        </div>
+      </div>
+      <div className="detail-meta">
+        <span>运行 ID：{run.id}</span>
+        <span>数据源：{source?.name || run.data_source_id || "-"}</span>
+        <span>
+          知识库：{knowledgeBase?.name || run.knowledge_base_id || "-"}
+        </span>
+        <span>
+          创建时间：{new Date(run.created_at).toLocaleString("zh-CN")}
+        </span>
+      </div>
+      <div className="row-actions analysis-actions">
+        {["running", "queued"].includes(run.status) && (
+          <button className="secondary-button" onClick={() => onCancel(run.id)}>
+            取消分析
+          </button>
+        )}
+        {["failed", "cancelled"].includes(run.status) && (
+          <button
+            className="primary-button"
+            onClick={() => onRetry(run.id)}
+            disabled={busy}
+          >
+            重试分析
+          </button>
+        )}
+      </div>
+      {run.sql_draft && (
+        <details className="result-detail">
+          <summary>SQL 草案</summary>
+          <pre className="sql-preview">{run.sql_draft}</pre>
+        </details>
+      )}
+      {run.sql && (
+        <details className="result-detail">
+          <summary>最终 SQL</summary>
+          <pre className="sql-preview">{run.sql}</pre>
+        </details>
+      )}
+      {run.guard_error && (
+        <p className="form-error">SQL Guard：{run.guard_error}</p>
+      )}
+      {run.result && (
+        <details className="result-detail">
+          <summary>查询结果摘要</summary>
+          <pre className="schema-preview">
+            {JSON.stringify(run.result, null, 2)}
+          </pre>
+        </details>
+      )}
+      <section className="analysis-run-steps">
+        <div className="panel-heading">
+          <strong>运行轨迹</strong>
+          <span className="panel-meta">{steps.length} 个步骤</span>
+        </div>
+        <div className="step-timeline">
+          {steps.length ? steps.map((step) => (
+            <article className="step-item" key={step.id}>
+              <span className={`status-dot-label ${step.status}`}>
+                {step.status}
+              </span>
+              <div>
+                <strong>{step.name}</strong>
+                <p>{step.input_summary}</p>
+                {step.error_message && <small>{step.error_message}</small>}
+              </div>
+              <time>{step.elapsed_ms ? `${step.elapsed_ms} ms` : "-"}</time>
+            </article>
+          )) : <p className="detail-hint">该历史运行没有保留阶段记录。请查看运行状态；失败或已取消的任务可重新发起分析。</p>}
+        </div>
+      </section>
+    </section>
+  );
 }

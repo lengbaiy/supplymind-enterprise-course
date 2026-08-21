@@ -1994,17 +1994,18 @@ async def delete_knowledge_base(
         )
         or 0
     )
+    if not knowledge_base.is_archived:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="知识库必须先归档；归档后仅空知识库可以永久删除",
+        )
     if document_count:
-        # Keep document history recoverable; a non-empty base can only be
-        # archived, never physically removed.
-        if not knowledge_base.is_archived:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT, detail="请先归档知识库后再删除"
-            )
-        knowledge_base.archived_at = knowledge_base.archived_at or datetime.now(UTC)
-    else:
-        # An actually empty base has no dependent rows, so remove it now.
-        await session.delete(knowledge_base)
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="知识库包含文档，无法永久删除；请保留归档记录",
+        )
+    # Only archived, truly empty bases may be physically removed.
+    await session.delete(knowledge_base)
     await audit(
         session,
         principal.tenant_id,

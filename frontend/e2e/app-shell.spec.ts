@@ -123,8 +123,9 @@ test("deleting an empty archived knowledge base removes its card immediately", a
   await expect(card).toBeVisible({ timeout: 15_000 });
   await card.getByRole("button", { name: /管理详情/ }).click();
   await page.getByRole("button", { name: "归档知识库" }).click();
-  await page.getByRole("button", { name: "删除知识库" }).click();
-  await page.getByRole("button", { name: "确认删除" }).click();
+  await page.getByRole("button", { name: "确认归档" }).click();
+  await page.getByRole("button", { name: "永久删除空知识库" }).click();
+  await page.getByRole("button", { name: "确认永久删除" }).click();
   await expect(card).toHaveCount(0);
 });
 
@@ -157,8 +158,9 @@ test("analysis history opens inside a contained session window", async ({ page }
   await expect(sessionWindow).toBeVisible();
   await expect(sessionWindow.getByText("运行 ID：")).toBeVisible();
   await expect(sessionWindow.locator(".step-timeline")).toBeVisible();
-  await sessionWindow.getByRole("button", { name: "关闭" }).click();
+  await sessionWindow.getByRole("button", { name: "新建分析" }).click();
   await expect(sessionWindow).toBeHidden();
+  await expect(page.getByLabel("分析问题")).toBeFocused();
 });
 
 test("administrator receives a streamed analysis conclusion from active resources", async ({ page }) => {

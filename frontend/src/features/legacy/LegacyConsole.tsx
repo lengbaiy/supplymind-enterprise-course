@@ -12,7 +12,10 @@ import { AuthScreen } from "../auth/AuthScreen";
 import { DashboardConfigurationPage } from "../dashboards/DashboardConfigurationPage";
 import type { AuditEvent } from "../audit/AuditPanel";
 import "../datasources/datasource.css";
-import { SystemStatusPanel, type SystemStatusData } from "../system/SystemStatusPanel";
+import {
+  SystemStatusPanel,
+  type SystemStatusData,
+} from "../system/SystemStatusPanel";
 import { SourceList } from "../datasources/SourceList";
 import { ReportsPage } from "../reports/ReportsPage";
 import { AnalysisSessionPage } from "../analysis/AnalysisSessionPage";
@@ -28,18 +31,53 @@ import { PlatformOrganizationsPage } from "../system/PlatformOrganizationsPage";
 import { SystemStatusPage } from "../system/SystemStatusPage";
 import { KnowledgeCard } from "../knowledge/KnowledgeCard";
 import { AppShell } from "../../components/AppShell";
-import type { Source, KnowledgeBase, Report, ReportExport, AnalysisRun, AgentStep, Member, Invitation, Document, KnowledgeDetail, Citation, DocumentSource, AnalysisResult, OrganizationSummary, OrganizationAccess, PermissionMatrix, SystemStatus, SchemaTable } from "../../app/domain-types";
+import type {
+  Source,
+  KnowledgeBase,
+  Report,
+  ReportExport,
+  AnalysisRun,
+  AgentStep,
+  Member,
+  Invitation,
+  Document,
+  KnowledgeDetail,
+  Citation,
+  DocumentSource,
+  AnalysisResult,
+  OrganizationSummary,
+  OrganizationAccess,
+  PermissionMatrix,
+  SystemStatus,
+  SchemaTable,
+} from "../../app/domain-types";
 import type { FormEvent } from "react";
 import { loadCharts } from "../../services/charts";
-import { getApiErrorMessage, getApiErrorState } from "../../services/api-errors";
+import {
+  getApiErrorMessage,
+  getApiErrorState,
+} from "../../services/api-errors";
 
 const API = API_BASE;
 const navItems = NAV_ITEMS;
 const navPaths: Record<string, string> = {
-  "运营总览": "/overview", "项目管理": "/project", "企业管理": "/platform/organizations", "大屏配置": "/dashboard/configuration", "分析会话": "/analysis", "数据源": "/data-sources", "知识库": "/knowledge", "报告中心": "/reports", "组织与审计": "/audit", "系统状态": "/system-status",
+  运营总览: "/overview",
+  项目管理: "/project",
+  企业管理: "/platform/organizations",
+  大屏配置: "/dashboard/configuration",
+  分析会话: "/analysis",
+  数据源: "/data-sources",
+  知识库: "/knowledge",
+  报告中心: "/reports",
+  组织与审计: "/audit",
+  系统状态: "/system-status",
 };
 
-export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: string }) {
+export function LegacyConsole({
+  initialNav = "运营总览",
+}: {
+  initialNav?: string;
+}) {
   const navigate = useNavigate();
   const [token, setToken] = useState(
     localStorage.getItem("supplymind_token") || "",
@@ -53,15 +91,28 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
     navigate(navPaths[nextNav] || "/overview");
   };
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
-  const [dashboardDimensions, setDashboardDimensions] = useState<{ factories: string[]; product_lines: string[]; suppliers: string[] }>({ factories: [], product_lines: [], suppliers: [] });
-  const [dashboardConfig, setDashboardConfig] = useState<{ dashboard_id: string; refresh_interval_seconds: number; visible_widgets: string[] }>({ dashboard_id: "", refresh_interval_seconds: 300, visible_widgets: [] });
+  const [dashboardDimensions, setDashboardDimensions] = useState<{
+    factories: string[];
+    product_lines: string[];
+    suppliers: string[];
+  }>({ factories: [], product_lines: [], suppliers: [] });
+  const [dashboardConfig, setDashboardConfig] = useState<{
+    dashboard_id: string;
+    refresh_interval_seconds: number;
+    visible_widgets: string[];
+  }>({ dashboard_id: "", refresh_interval_seconds: 300, visible_widgets: [] });
   const [sources, setSources] = useState<Source[]>([]);
   const [knowledge, setKnowledge] = useState<KnowledgeBase[]>([]);
-  const [knowledgeFilter, setKnowledgeFilter] = useState({ name: "", status: "" });
+  const [knowledgeFilter, setKnowledgeFilter] = useState({
+    name: "",
+    status: "",
+  });
   const [knowledgePage, setKnowledgePage] = useState(1);
   const [knowledgePageSize, setKnowledgePageSize] = useState(10);
   const [knowledgeHasMore, setKnowledgeHasMore] = useState(false);
-  const [platformOrganizations, setPlatformOrganizations] = useState<PlatformOrganization[]>([]);
+  const [platformOrganizations, setPlatformOrganizations] = useState<
+    PlatformOrganization[]
+  >([]);
   const [platformPage, setPlatformPage] = useState(1);
   const [reports, setReports] = useState<Report[]>([]);
   const [analyses, setAnalyses] = useState<AnalysisRun[]>([]);
@@ -80,25 +131,60 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
     table_count: number;
     created_at: string;
   } | null>(null);
-  const [sourceSyncTasks, setSourceSyncTasks] = useState<{ id: string; status: string; started_at?: string; finished_at?: string; error_message?: string; celery_task_id?: string }[]>([]);
-  const [selectedSchemaTable, setSelectedSchemaTable] = useState<SchemaTable | null>(null);
+  const [sourceSyncTasks, setSourceSyncTasks] = useState<
+    {
+      id: string;
+      status: string;
+      started_at?: string;
+      finished_at?: string;
+      error_message?: string;
+      celery_task_id?: string;
+    }[]
+  >([]);
+  const [selectedSchemaTable, setSelectedSchemaTable] =
+    useState<SchemaTable | null>(null);
   const [allowlistDraft, setAllowlistDraft] = useState<string[]>([]);
-  const [sourceQuery, setSourceQuery] = useState("SELECT * FROM production_work_orders LIMIT 20");
-  const [sourceQueryResult, setSourceQueryResult] = useState<{ sql: string; tables: string[]; rows: Record<string, unknown>[]; row_count: number; max_rows: number; elapsed_ms: number; timed_out: boolean; redacted: boolean } | null>(null);
+  const [sourceQuery, setSourceQuery] = useState(
+    "SELECT * FROM production_work_orders LIMIT 20",
+  );
+  const [sourceQueryResult, setSourceQueryResult] = useState<{
+    sql: string;
+    tables: string[];
+    rows: Record<string, unknown>[];
+    row_count: number;
+    max_rows: number;
+    elapsed_ms: number;
+    timed_out: boolean;
+    redacted: boolean;
+  } | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [invitationLink, setInvitationLink] = useState<string | null>(null);
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
-  const [failedTasks, setFailedTasks] = useState<{ id: string; document_id: string; status: string; dead_letter?: boolean; attempts?: number; error_message?: string; created_at: string }[]>([]);
+  const [failedTasks, setFailedTasks] = useState<
+    {
+      id: string;
+      document_id: string;
+      status: string;
+      dead_letter?: boolean;
+      attempts?: number;
+      error_message?: string;
+      created_at: string;
+    }[]
+  >([]);
   const [selectedAudit, setSelectedAudit] = useState<AuditEvent | null>(null);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [selectedKnowledge, setSelectedKnowledge] =
     useState<KnowledgeDetail | null>(null);
   const [pendingKnowledgeDelete, setPendingKnowledgeDelete] =
     useState<KnowledgeDetail | null>(null);
+  const [pendingKnowledgeArchive, setPendingKnowledgeArchive] =
+    useState<KnowledgeDetail | null>(null);
   const [knowledgeQuery, setKnowledgeQuery] = useState("");
   const [knowledgeCitations, setKnowledgeCitations] = useState<Citation[]>([]);
-  const [documentSource, setDocumentSource] = useState<DocumentSource | null>(null);
+  const [documentSource, setDocumentSource] = useState<DocumentSource | null>(
+    null,
+  );
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(
     null,
   );
@@ -115,7 +201,14 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
   });
   const [auditFilter, setAuditFilter] = useState("");
   const [auditRunId, setAuditRunId] = useState("");
-  const [reportFilter, setReportFilter] = useState({ title: "", status: "", createdBy: "", runId: "", createdFrom: "", createdTo: "" });
+  const [reportFilter, setReportFilter] = useState({
+    title: "",
+    status: "",
+    createdBy: "",
+    runId: "",
+    createdFrom: "",
+    createdTo: "",
+  });
   const [refreshingDashboard, setRefreshingDashboard] = useState(false);
   const [dashboardFilters, setDashboardFilters] = useState<DashboardFilters>({
     factory: "",
@@ -127,13 +220,21 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
   const [question, setQuestion] = useState("近30天各工厂生产达成率与缺料风险");
   const [analysisSourceId, setAnalysisSourceId] = useState("");
   const [analysisKnowledgeBaseId, setAnalysisKnowledgeBaseId] = useState("");
-  const [analysisConversationId, setAnalysisConversationId] = useState<string>(() => crypto.randomUUID());
-  const [analysisMessages, setAnalysisMessages] = useState<{ role: "user" | "assistant"; content: string; created_at: string }[]>([]);
+  const [analysisConversationId, setAnalysisConversationId] = useState<string>(
+    () => crypto.randomUUID(),
+  );
+  const [analysisMessages, setAnalysisMessages] = useState<
+    { role: "user" | "assistant"; content: string; created_at: string }[]
+  >([]);
   const analysisContextLoadedRef = useRef("");
-  const analysisContextStorageKey = organization?.id ? `supplymind_analysis_context_${organization.id}` : "";
+  const analysisContextStorageKey = organization?.id
+    ? `supplymind_analysis_context_${organization.id}`
+    : "";
   const [events, setEvents] = useState<string[]>([]);
   const [notice, setNotice] = useState("");
-  const [accessError, setAccessError] = useState<"forbidden" | "not-found" | "expired" | "">("");
+  const [accessError, setAccessError] = useState<
+    "forbidden" | "not-found" | "expired" | ""
+  >("");
   const [systemStatus, setSystemStatus] = useState<"ready" | "degraded">(
     "ready",
   );
@@ -145,7 +246,9 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
   const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [loginBusy, setLoginBusy] = useState(false);
   const [oidcBusy, setOidcBusy] = useState(false);
-  const [inviteToken] = useState(() => new URLSearchParams(window.location.search).get("invite") || "");
+  const [inviteToken] = useState(
+    () => new URLSearchParams(window.location.search).get("invite") || "",
+  );
   const [inviteError, setInviteError] = useState("");
   const [busy, setBusy] = useState(false);
   const [sourceDraft, setSourceDraft] = useState({
@@ -159,12 +262,20 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
     allowed_tables: "",
     tls_required: true,
   });
-  const canViewNav = (item: NavItem) => canAccessNav(item, organization?.role, permissions);
+  const canViewNav = (item: NavItem) =>
+    canAccessNav(item, organization?.role, permissions);
   const visibleNavItems = navItems.filter(canViewNav);
-  const canManageOrganization = ["org_admin", "platform_admin"].includes(organization?.role || "");
+  const canManageOrganization = ["org_admin", "platform_admin"].includes(
+    organization?.role || "",
+  );
   useEffect(() => {
     const requested = navItems.find((item) => item === nav);
-    if (!organization || !requested || canAccessNav(requested, organization.role, permissions)) return;
+    if (
+      !organization ||
+      !requested ||
+      canAccessNav(requested, organization.role, permissions)
+    )
+      return;
     setAccessError("forbidden");
     setNav("运营总览");
     navigate("/overview", { replace: true });
@@ -174,10 +285,15 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
   const supplierChartRef = useRef<HTMLDivElement>(null);
   const workspaceLoadedRef = useRef(false);
   const knowledgeRequestVersionRef = useRef(0);
+  const dashboardRequestVersionRef = useRef(0);
   useEffect(() => {
     if (!profileOpen) return;
     const closeOnOutside = (event: MouseEvent) => {
-      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target as Node)) setProfileOpen(false);
+      if (
+        profileMenuRef.current &&
+        !profileMenuRef.current.contains(event.target as Node)
+      )
+        setProfileOpen(false);
     };
     document.addEventListener("mousedown", closeOnOutside);
     return () => document.removeEventListener("mousedown", closeOnOutside);
@@ -187,18 +303,38 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
     : {};
   async function api<T>(path: string, init?: RequestInit): Promise<T> {
     try {
-      return await apiRequest<T>(API, token, path, init, refresh, (accessToken, nextRefresh) => {
-        localStorage.setItem("supplymind_token", accessToken);
-        localStorage.setItem("supplymind_refresh", nextRefresh);
-        setToken(accessToken);
-        setRefresh(nextRefresh);
-      });
+      return await apiRequest<T>(
+        API,
+        token,
+        path,
+        init,
+        refresh,
+        (accessToken, nextRefresh) => {
+          localStorage.setItem("supplymind_token", accessToken);
+          localStorage.setItem("supplymind_refresh", nextRefresh);
+          setToken(accessToken);
+          setRefresh(nextRefresh);
+        },
+      );
     } catch (error) {
       if (error instanceof Error && "status" in error) {
         const status = Number((error as { status?: number }).status);
-        setAccessError(status === 403 ? "forbidden" : status === 404 ? "not-found" : status === 401 ? "expired" : "");
+        setAccessError(
+          status === 403
+            ? "forbidden"
+            : status === 404
+              ? "not-found"
+              : status === 401
+                ? "expired"
+                : "",
+        );
       }
-      if (error instanceof Error && "status" in error && (error as { status?: number }).status === 401 && !path.startsWith("/auth/login")) {
+      if (
+        error instanceof Error &&
+        "status" in error &&
+        (error as { status?: number }).status === 401 &&
+        !path.startsWith("/auth/login")
+      ) {
         localStorage.removeItem("supplymind_token");
         localStorage.removeItem("supplymind_refresh");
         setToken("");
@@ -210,13 +346,49 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
       throw error;
     }
   }
-  async function load() {
+  const pendingDocumentIds = documents
+    .filter((document) => ["queued", "processing"].includes(document.status))
+    .map((document) => document.id)
+    .join(",");
+  useEffect(() => {
+    if (!token || nav !== "知识库" || !pendingDocumentIds) return;
+    let disposed = false;
+    const ids = pendingDocumentIds.split(",");
+    const refreshPendingDocuments = async () => {
+      try {
+        const refreshed = await Promise.all(
+          ids.map((id) => api<Document>(`/documents/${id}`)),
+        );
+        if (disposed) return;
+        setDocuments((current) =>
+          current.map(
+            (document) =>
+              refreshed.find((item) => item.id === document.id) || document,
+          ),
+        );
+      } catch {
+        // The card keeps its queued state and offers management actions if a
+        // transient refresh fails. Uploading itself is already complete.
+      }
+    };
+    void refreshPendingDocuments();
+    const timer = window.setInterval(() => void refreshPendingDocuments(), 2500);
+    return () => {
+      disposed = true;
+      window.clearInterval(timer);
+    };
+  }, [nav, pendingDocumentIds, token]);
+  async function load(nextDashboardFilters = dashboardFilters) {
     if (!token) return;
     setBusy(true);
     try {
       let currentRole = organization?.role || "";
       if (!workspaceLoadedRef.current) {
-        const [currentOrganization, currentPermissions, availableOrganizations] = await Promise.all([
+        const [
+          currentOrganization,
+          currentPermissions,
+          availableOrganizations,
+        ] = await Promise.all([
           api<OrganizationSummary>("/organization"),
           api<PermissionMatrix>("/organization/permissions"),
           api<OrganizationAccess[]>("/auth/organizations"),
@@ -224,42 +396,84 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
         setOrganization(currentOrganization);
         setPermissions(currentPermissions);
         setOrganizations(availableOrganizations);
-        setQuotaDraft((current) => ({ ...current, ...currentOrganization.quota }));
+        setQuotaDraft((current) => ({
+          ...current,
+          ...currentOrganization.quota,
+        }));
         currentRole = currentOrganization.role;
         workspaceLoadedRef.current = true;
       }
 
       if (nav === "运营总览" || nav === "大屏配置") {
-        const query = new URLSearchParams({ ...(dashboardFilters.factory ? { factory: dashboardFilters.factory } : {}), ...(dashboardFilters.productLine ? { product_line: dashboardFilters.productLine } : {}), period: dashboardFilters.period });
+        const query = new URLSearchParams({
+          ...(nextDashboardFilters.factory
+            ? { factory: nextDashboardFilters.factory }
+            : {}),
+          ...(nextDashboardFilters.productLine
+            ? { product_line: nextDashboardFilters.productLine }
+            : {}),
+          period: nextDashboardFilters.period,
+        });
+        const requestVersion = ++dashboardRequestVersionRef.current;
         const [currentDashboard, dimensions, config] = await Promise.all([
           api<Dashboard>(`/dashboards/supply-chain?${query.toString()}`),
-          api<{ factories: string[]; product_lines: string[]; suppliers: string[] }>("/dashboards/supply-chain/dimensions"),
+          api<{
+            factories: string[];
+            product_lines: string[];
+            suppliers: string[];
+          }>("/dashboards/supply-chain/dimensions"),
           api<typeof dashboardConfig>("/dashboards/supply-chain/config"),
         ]);
-        setDashboard(currentDashboard);
-        setDashboardDimensions(dimensions);
-        setDashboardConfig(config);
+        if (requestVersion === dashboardRequestVersionRef.current) {
+          setDashboard(currentDashboard);
+          setDashboardDimensions(dimensions);
+          setDashboardConfig(config);
+        }
       }
       if (nav === "数据源" || nav === "分析会话") {
         const currentSources = await api<Source[]>("/data-sources");
         setSources(currentSources);
-        setAnalysisSourceId((current) => current && currentSources.some((item) => item.id === current) ? current : "");
+        setAnalysisSourceId((current) =>
+          current && currentSources.some((item) => item.id === current)
+            ? current
+            : "",
+        );
       }
       if (nav === "知识库" || nav === "分析会话") {
         const requestVersion = ++knowledgeRequestVersionRef.current;
-        const currentKnowledge = await api<KnowledgeBase[]>(`/knowledge-bases?${new URLSearchParams({ page: String(knowledgePage), page_size: String(knowledgePageSize), ...(knowledgeFilter.name ? { name: knowledgeFilter.name } : {}), ...(knowledgeFilter.status ? { status: knowledgeFilter.status } : {}) }).toString()}`);
+        const currentKnowledge = await api<KnowledgeBase[]>(
+          `/knowledge-bases?${new URLSearchParams({ page: String(knowledgePage), page_size: String(knowledgePageSize), ...(knowledgeFilter.name ? { name: knowledgeFilter.name } : {}), ...(knowledgeFilter.status ? { status: knowledgeFilter.status } : {}) }).toString()}`,
+        );
         if (requestVersion !== knowledgeRequestVersionRef.current) return;
         setKnowledge(currentKnowledge);
         setKnowledgeHasMore(currentKnowledge.length === knowledgePageSize);
-        setAnalysisKnowledgeBaseId((current) => current && currentKnowledge.some((item) => item.id === current) ? current : "");
-        if (nav === "知识库") setDocuments([]);
+        setAnalysisKnowledgeBaseId((current) =>
+          current && currentKnowledge.some((item) => item.id === current)
+            ? current
+            : "",
+        );
       }
       if (nav === "报告中心") {
-        const reportQuery = new URLSearchParams({ ...(reportFilter.title ? { title: reportFilter.title } : {}), ...(reportFilter.status ? { status: reportFilter.status } : {}), ...(reportFilter.createdBy ? { created_by: reportFilter.createdBy } : {}), ...(reportFilter.runId ? { run_id: reportFilter.runId } : {}), ...(reportFilter.createdFrom ? { created_from: new Date(reportFilter.createdFrom).toISOString() } : {}), ...(reportFilter.createdTo ? { created_to: new Date(reportFilter.createdTo).toISOString() } : {}) });
+        const reportQuery = new URLSearchParams({
+          ...(reportFilter.title ? { title: reportFilter.title } : {}),
+          ...(reportFilter.status ? { status: reportFilter.status } : {}),
+          ...(reportFilter.createdBy
+            ? { created_by: reportFilter.createdBy }
+            : {}),
+          ...(reportFilter.runId ? { run_id: reportFilter.runId } : {}),
+          ...(reportFilter.createdFrom
+            ? { created_from: new Date(reportFilter.createdFrom).toISOString() }
+            : {}),
+          ...(reportFilter.createdTo
+            ? { created_to: new Date(reportFilter.createdTo).toISOString() }
+            : {}),
+        });
         setReports(await api<Report[]>(`/reports?${reportQuery.toString()}`));
       }
       if (nav === "分析会话") {
-        const currentAnalyses = await api<AnalysisRun[]>(`/analyses?page=${analysisPage}&page_size=${analysisPageSize}`);
+        const currentAnalyses = await api<AnalysisRun[]>(
+          `/analyses?page=${analysisPage}&page_size=${analysisPageSize}`,
+        );
         setAnalyses(currentAnalyses);
         setAnalysisHasMore(currentAnalyses.length === analysisPageSize);
       }
@@ -269,31 +483,57 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
       if (nav === "组织与审计") {
         const [currentInvitations, currentAuditEvents] = await Promise.all([
           api<Invitation[]>("/members/invitations"),
-          api<AuditEvent[]>(`/audit?${new URLSearchParams({ limit: "20", ...(auditFilter ? { action: auditFilter } : {}), ...(auditRunId ? { run_id: auditRunId } : {}) }).toString()}`),
+          api<AuditEvent[]>(
+            `/audit?${new URLSearchParams({ limit: "20", ...(auditFilter ? { action: auditFilter } : {}), ...(auditRunId ? { run_id: auditRunId } : {}) }).toString()}`,
+          ),
         ]);
         setInvitations(currentInvitations);
         setAuditEvents(currentAuditEvents);
       }
       if (nav === "企业管理" && currentRole === "platform_admin") {
-        setPlatformOrganizations(await api<PlatformOrganization[]>(`/platform/organizations?page=${platformPage}&page_size=10`));
+        setPlatformOrganizations(
+          await api<PlatformOrganization[]>(
+            `/platform/organizations?page=${platformPage}&page_size=10`,
+          ),
+        );
       }
       if (nav === "系统状态") {
         const health = await api<SystemStatus>("/system/status");
         setSystemStatus(health.status === "ready" ? "ready" : "degraded");
         setSystemDetails(health);
         if (["org_admin", "platform_admin"].includes(currentRole)) {
-          api<typeof failedTasks>("/ingestion-tasks?status=failed&page=1&page_size=10").then(setFailedTasks).catch(() => setFailedTasks([]));
+          api<typeof failedTasks>(
+            "/ingestion-tasks?status=failed&page=1&page_size=10",
+          )
+            .then(setFailedTasks)
+            .catch(() => setFailedTasks([]));
         }
       }
     } catch (error) {
-      setNotice(error instanceof Error ? `${getApiErrorMessage(getApiErrorState(error))} ${error.message}` : "无法读取工作区");
+      setNotice(
+        error instanceof Error
+          ? `${getApiErrorMessage(getApiErrorState(error))} ${error.message}`
+          : "无法读取工作区",
+      );
     } finally {
       setBusy(false);
     }
   }
-  async function saveDashboardConfig(seconds: number, widgets = dashboardConfig.visible_widgets) {
+  async function saveDashboardConfig(
+    seconds: number,
+    widgets = dashboardConfig.visible_widgets,
+  ) {
     try {
-      const config = await api<typeof dashboardConfig>("/dashboards/supply-chain/config", { method: "PATCH", body: JSON.stringify({ refresh_interval_seconds: seconds, visible_widgets: widgets }) });
+      const config = await api<typeof dashboardConfig>(
+        "/dashboards/supply-chain/config",
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            refresh_interval_seconds: seconds,
+            visible_widgets: widgets,
+          }),
+        },
+      );
       setDashboardConfig(config);
       setNotice("大屏组织级刷新配置已保存");
     } catch (error) {
@@ -311,8 +551,14 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
     }
     fetch(`${API}/auth/oidc/callback?${new URLSearchParams({ code, state })}`)
       .then(async (response) => {
-        if (!response.ok) throw new Error((await response.json().catch(() => ({}))).detail || "单点登录失败");
-        return response.json() as Promise<{ access_token: string; refresh_token: string }>;
+        if (!response.ok)
+          throw new Error(
+            (await response.json().catch(() => ({}))).detail || "单点登录失败",
+          );
+        return response.json() as Promise<{
+          access_token: string;
+          refresh_token: string;
+        }>;
       })
       .then((body) => {
         localStorage.setItem("supplymind_token", body.access_token);
@@ -321,11 +567,25 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
         setRefresh(body.refresh_token);
         window.history.replaceState({}, document.title, "/");
       })
-      .catch((error) => setLoginError(error instanceof Error ? error.message : "单点登录失败"));
+      .catch((error) =>
+        setLoginError(error instanceof Error ? error.message : "单点登录失败"),
+      );
   }, []);
   useEffect(() => {
     void load();
-  }, [token, nav, dashboardFilters, reportFilter, auditFilter, auditRunId, knowledgeFilter, analysisPage, analysisPageSize, knowledgePage, knowledgePageSize, platformPage]);
+  }, [
+    token,
+    nav,
+    reportFilter,
+    auditFilter,
+    auditRunId,
+    knowledgeFilter,
+    analysisPage,
+    analysisPageSize,
+    knowledgePage,
+    knowledgePageSize,
+    platformPage,
+  ]);
   useEffect(() => {
     if (token && organization && !canViewNav(nav as NavItem)) {
       selectNav(visibleNavItems[0] || "运营总览");
@@ -336,9 +596,14 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
     try {
       const saved = localStorage.getItem(analysisContextStorageKey);
       if (saved) {
-        const parsed = JSON.parse(saved) as { conversationId?: string; messages?: typeof analysisMessages };
-        if (parsed.conversationId) setAnalysisConversationId(parsed.conversationId);
-        if (Array.isArray(parsed.messages)) setAnalysisMessages(parsed.messages.slice(-20));
+        const parsed = JSON.parse(saved) as {
+          conversationId?: string;
+          messages?: typeof analysisMessages;
+        };
+        if (parsed.conversationId)
+          setAnalysisConversationId(parsed.conversationId);
+        if (Array.isArray(parsed.messages))
+          setAnalysisMessages(parsed.messages.slice(-20));
       }
       analysisContextLoadedRef.current = analysisContextStorageKey;
     } catch {
@@ -347,67 +612,144 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
     }
   }, [analysisContextStorageKey]);
   useEffect(() => {
-    if (!analysisContextStorageKey || analysisContextLoadedRef.current !== analysisContextStorageKey) return;
-    localStorage.setItem(analysisContextStorageKey, JSON.stringify({ conversationId: analysisConversationId, messages: analysisMessages.slice(-20) }));
+    if (
+      !analysisContextStorageKey ||
+      analysisContextLoadedRef.current !== analysisContextStorageKey
+    )
+      return;
+    localStorage.setItem(
+      analysisContextStorageKey,
+      JSON.stringify({
+        conversationId: analysisConversationId,
+        messages: analysisMessages.slice(-20),
+      }),
+    );
   }, [analysisContextStorageKey, analysisConversationId, analysisMessages]);
   useEffect(() => {
     if (!dashboard || !chartRef.current || nav !== "运营总览") return;
     let disposed = false;
-    let chart: import("../../services/charts-runtime").ChartInstance | undefined;
-    let factoryChart: import("../../services/charts-runtime").ChartInstance | undefined;
-    let supplierChart: import("../../services/charts-runtime").ChartInstance | undefined;
+    let chart:
+      import("../../services/charts-runtime").ChartInstance | undefined;
+    let factoryChart:
+      import("../../services/charts-runtime").ChartInstance | undefined;
+    let supplierChart:
+      import("../../services/charts-runtime").ChartInstance | undefined;
     const resize = () => chart?.resize();
     const renderCharts = async () => {
       const echarts = await loadCharts();
       if (disposed || !chartRef.current) return;
       chart = echarts.init(chartRef.current);
       chart.setOption({
-      grid: { left: 12, right: 12, top: 20, bottom: 18, containLabel: true },
-      tooltip: {
-        trigger: "axis",
-        backgroundColor: "#14352c",
-        borderWidth: 0,
-        textStyle: { color: "#fff" },
-      },
-      xAxis: {
-        type: "category",
-        boundaryGap: false,
-        data: dashboard.trend.map((x) => x.month),
-        axisLabel: { color: "#73847c" },
-      },
-      yAxis: {
-        type: "value",
-        min: 80,
-        max: 100,
-        axisLabel: { color: "#73847c", formatter: "{value}%" },
-        splitLine: { lineStyle: { color: "#edf2ef" } },
-      },
-      series: [
-        {
-          type: "line",
-          smooth: true,
-          data: dashboard.trend.map((x) => x.rate),
-          symbol: "circle",
-          symbolSize: 7,
-          lineStyle: { width: 3, color: "#15966d" },
-          itemStyle: { color: "#15966d", borderColor: "#fff", borderWidth: 2 },
-          areaStyle: { color: "rgba(21,150,109,.1)" },
+        grid: { left: 12, right: 12, top: 20, bottom: 18, containLabel: true },
+        tooltip: {
+          trigger: "axis",
+          backgroundColor: "#14352c",
+          borderWidth: 0,
+          textStyle: { color: "#fff" },
         },
-      ],
-    });
-    const makeRankingChart = (element: HTMLDivElement, labels: string[], values: number[], color: string) => {
-      const ranking = echarts.init(element);
-      ranking.setOption({
-        grid: { left: 82, right: 28, top: 8, bottom: 8, containLabel: false },
-        tooltip: { trigger: "axis", axisPointer: { type: "shadow" }, valueFormatter: (value: number) => `${value.toFixed(1)}%` },
-        xAxis: { type: "value", min: 0, max: 100, axisLabel: { color: "#73847c", formatter: "{value}%" }, splitLine: { lineStyle: { color: "#edf2ef" } } },
-        yAxis: { type: "category", inverse: true, data: labels, axisLabel: { color: "#40584e", fontSize: 11 }, axisLine: { show: false }, axisTick: { show: false } },
-        series: [{ type: "bar", barWidth: 16, data: values, itemStyle: { color, borderRadius: [0, 4, 4, 0] }, label: { show: true, position: "right", color: "#40584e", formatter: (params: { value: number }) => `${params.value.toFixed(1)}%` } }],
+        xAxis: {
+          type: "category",
+          boundaryGap: false,
+          data: dashboard.trend.map((x) => x.month),
+          axisLabel: { color: "#73847c" },
+        },
+        yAxis: {
+          type: "value",
+          min: 80,
+          max: 100,
+          axisLabel: { color: "#73847c", formatter: "{value}%" },
+          splitLine: { lineStyle: { color: "#edf2ef" } },
+        },
+        series: [
+          {
+            type: "line",
+            smooth: true,
+            data: dashboard.trend.map((x) => x.rate),
+            symbol: "circle",
+            symbolSize: 7,
+            lineStyle: { width: 3, color: "#15966d" },
+            itemStyle: {
+              color: "#15966d",
+              borderColor: "#fff",
+              borderWidth: 2,
+            },
+            areaStyle: { color: "rgba(21,150,109,.1)" },
+          },
+        ],
       });
-      return ranking;
-    };
-    factoryChart = (factoryChartRef.current && makeRankingChart(factoryChartRef.current, (dashboard.rankings?.factories || []).map((item) => item.factory || "未命名"), (dashboard.rankings?.factories || []).map((item) => Number(item.rate || 0)), "#15966d")) || undefined;
-    supplierChart = (supplierChartRef.current && makeRankingChart(supplierChartRef.current, (dashboard.rankings?.suppliers || []).map((item) => item.supplier_name || "未命名"), (dashboard.rankings?.suppliers || []).map((item) => Number(item.rate || 0)), "#4c8fba")) || undefined;
+      const makeRankingChart = (
+        element: HTMLDivElement,
+        labels: string[],
+        values: number[],
+        color: string,
+      ) => {
+        const ranking = echarts.init(element);
+        ranking.setOption({
+          grid: { left: 82, right: 28, top: 8, bottom: 8, containLabel: false },
+          tooltip: {
+            trigger: "axis",
+            axisPointer: { type: "shadow" },
+            valueFormatter: (value: number) => `${value.toFixed(1)}%`,
+          },
+          xAxis: {
+            type: "value",
+            min: 0,
+            max: 100,
+            axisLabel: { color: "#73847c", formatter: "{value}%" },
+            splitLine: { lineStyle: { color: "#edf2ef" } },
+          },
+          yAxis: {
+            type: "category",
+            inverse: true,
+            data: labels,
+            axisLabel: { color: "#40584e", fontSize: 11 },
+            axisLine: { show: false },
+            axisTick: { show: false },
+          },
+          series: [
+            {
+              type: "bar",
+              barWidth: 16,
+              data: values,
+              itemStyle: { color, borderRadius: [0, 4, 4, 0] },
+              label: {
+                show: true,
+                position: "right",
+                color: "#40584e",
+                formatter: (params: { value: number }) =>
+                  `${params.value.toFixed(1)}%`,
+              },
+            },
+          ],
+        });
+        return ranking;
+      };
+      factoryChart =
+        (factoryChartRef.current &&
+          makeRankingChart(
+            factoryChartRef.current,
+            (dashboard.rankings?.factories || []).map(
+              (item) => item.factory || "未命名",
+            ),
+            (dashboard.rankings?.factories || []).map((item) =>
+              Number(item.rate || 0),
+            ),
+            "#15966d",
+          )) ||
+        undefined;
+      supplierChart =
+        (supplierChartRef.current &&
+          makeRankingChart(
+            supplierChartRef.current,
+            (dashboard.rankings?.suppliers || []).map(
+              (item) => item.supplier_name || "未命名",
+            ),
+            (dashboard.rankings?.suppliers || []).map((item) =>
+              Number(item.rate || 0),
+            ),
+            "#4c8fba",
+          )) ||
+        undefined;
     };
     window.addEventListener("resize", resize);
     void renderCharts();
@@ -455,9 +797,13 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
     setOidcBusy(true);
     try {
       if (!loginOrganization.trim()) throw new Error("请先填写组织标识");
-      window.location.assign(`${API}/auth/oidc/start?organization_slug=${encodeURIComponent(loginOrganization.trim())}`);
+      window.location.assign(
+        `${API}/auth/oidc/start?organization_slug=${encodeURIComponent(loginOrganization.trim())}`,
+      );
     } catch (error) {
-      setLoginError(error instanceof Error ? error.message : "单点登录暂不可用");
+      setLoginError(
+        error instanceof Error ? error.message : "单点登录暂不可用",
+      );
       setOidcBusy(false);
     }
   }
@@ -469,10 +815,15 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
       const response = await fetch(`${API}/members/invitations/accept`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: inviteToken, display_name: values.get("display_name"), password: values.get("password") }),
+        body: JSON.stringify({
+          token: inviteToken,
+          display_name: values.get("display_name"),
+          password: values.get("password"),
+        }),
       });
       const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(String(payload.detail || "邀请接受失败"));
+      if (!response.ok)
+        throw new Error(String(payload.detail || "邀请接受失败"));
       localStorage.setItem("supplymind_token", payload.access_token);
       localStorage.setItem("supplymind_refresh", payload.refresh_token || "");
       setToken(payload.access_token);
@@ -489,8 +840,14 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
     setBusy(true);
     const context = analysisMessages
       .slice(-8)
-      .map((message) => `${message.role === "user" ? "用户" : "助手"}：${message.content}`);
-    setAnalysisMessages((current) => [...current, { role: "user", content: question, created_at: new Date().toISOString() }]);
+      .map(
+        (message) =>
+          `${message.role === "user" ? "用户" : "助手"}：${message.content}`,
+      );
+    setAnalysisMessages((current) => [
+      ...current,
+      { role: "user", content: question, created_at: new Date().toISOString() },
+    ]);
     setAnalysisResult(null);
     setEvents(["queued · 已排队，正在读取指标口径和数据结构..."]);
     let activeRunId = "";
@@ -536,22 +893,51 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
         const payload = await response.json().catch(() => ({}));
         const trace = response.headers.get("x-trace-id");
         const detail = payload.detail;
-        const message = typeof detail === "object" && detail ? String(detail.message || detail.hint || "分析请求被拒绝") : String(detail || "分析请求被拒绝");
+        const message =
+          typeof detail === "object" && detail
+            ? String(detail.message || detail.hint || "分析请求被拒绝")
+            : String(detail || "分析请求被拒绝");
         throw new Error(`${message}${trace ? `（Trace ID: ${trace}）` : ""}`);
       }
-      const parsed = parseSseEvents(await readSseResponse(response, (chunk) => {
-        const queued = chunk.find((item) => item.event === "queued");
-        if (queued?.data.run_id) activeRunId = String(queued.data.run_id);
-        if (queued?.data.conversation_id) setAnalysisConversationId(String(queued.data.conversation_id));
-        if (chunk.length) setEvents((current) => [...current, ...chunk.map(({ event, data }) => `${event} · ${String(data.message || data.tool || data.run_id || "处理中")}`)].slice(-30));
-      }));
+      const parsed = parseSseEvents(
+        await readSseResponse(response, (chunk) => {
+          const queued = chunk.find((item) => item.event === "queued");
+          if (queued?.data.run_id) activeRunId = String(queued.data.run_id);
+          if (queued?.data.conversation_id)
+            setAnalysisConversationId(String(queued.data.conversation_id));
+          if (chunk.length)
+            setEvents((current) =>
+              [
+                ...current,
+                ...chunk.map(
+                  ({ event, data }) =>
+                    `${event} · ${String(data.message || data.tool || data.run_id || "处理中")}`,
+                ),
+              ].slice(-30),
+            );
+        }),
+      );
       const completed = parsed.find(({ event }) => event === "completed");
       const draft = parsed.find(({ event }) => event === "sql_draft");
       const failed = parsed.find(({ event }) => event === "failed");
       if (completed) {
-        const nextResult = { ...(completed.data as AnalysisResult), sql_draft: draft?.data.sql ? String(draft.data.sql) : undefined, guard_error: failed?.data.message ? String(failed.data.message) : undefined, trace_id: response.headers.get("x-trace-id") || undefined };
+        const nextResult = {
+          ...(completed.data as AnalysisResult),
+          sql_draft: draft?.data.sql ? String(draft.data.sql) : undefined,
+          guard_error: failed?.data.message
+            ? String(failed.data.message)
+            : undefined,
+          trace_id: response.headers.get("x-trace-id") || undefined,
+        };
         setAnalysisResult(nextResult);
-        setAnalysisMessages((current) => [...current, { role: "assistant", content: String(nextResult.result?.insight || "分析已完成"), created_at: new Date().toISOString() }]);
+        setAnalysisMessages((current) => [
+          ...current,
+          {
+            role: "assistant",
+            content: String(nextResult.result?.insight || "分析已完成"),
+            created_at: new Date().toISOString(),
+          },
+        ]);
       }
       setEvents(
         parsed.map(
@@ -581,15 +967,28 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
               guard_error: recovered.guard_error,
             });
           }
-          setEvents((current) => [...current, `reconnected · 已恢复运行 ${recovered.status}`]);
+          setEvents((current) => [
+            ...current,
+            `reconnected · 已恢复运行 ${recovered.status}`,
+          ]);
           await load();
         } catch {
-          setEvents((current) => [...current, "分析连接中断，运行状态暂不可恢复"]);
+          setEvents((current) => [
+            ...current,
+            "分析连接中断，运行状态暂不可恢复",
+          ]);
         }
       } else {
         const message = error instanceof Error ? error.message : "分析失败";
         setEvents([message]);
-        setAnalysisMessages((current) => [...current, { role: "assistant", content: `本次分析未执行：${message}`, created_at: new Date().toISOString() }]);
+        setAnalysisMessages((current) => [
+          ...current,
+          {
+            role: "assistant",
+            content: `本次分析未执行：${message}`,
+            created_at: new Date().toISOString(),
+          },
+        ]);
       }
     } finally {
       setBusy(false);
@@ -674,8 +1073,14 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
       const payload = new FormData();
       payload.append("file", file);
       payload.append("replace_document_id", document.id);
-      const updated = await api<Document>(`/knowledge-bases/${document.knowledge_base_id}/documents`, { method: "POST", body: payload });
-      setDocuments((current) => [updated, ...current.filter((item) => item.id !== document.id)]);
+      const updated = await api<Document>(
+        `/knowledge-bases/${document.knowledge_base_id}/documents`,
+        { method: "POST", body: payload },
+      );
+      setDocuments((current) => [
+        updated,
+        ...current.filter((item) => item.id !== document.id),
+      ]);
       setNotice("文档新版本已进入摄取队列");
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "文档替换失败");
@@ -703,22 +1108,29 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
   }
   async function openKnowledge(id: string) {
     try {
-      setSelectedKnowledge(
-        await api<KnowledgeDetail>(`/knowledge-bases/${id}`),
-      );
+      const [detail, listedDocuments] = await Promise.all([
+        api<KnowledgeDetail>(`/knowledge-bases/${id}`),
+        api<Document[]>(`/knowledge-bases/${id}/documents?page=1&page_size=200`),
+      ]);
+      setSelectedKnowledge(detail);
+      setDocuments((current) => [
+        ...current.filter((document) => document.knowledge_base_id !== id),
+        ...listedDocuments,
+      ]);
       setKnowledgeCitations([]);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "知识库详情读取失败");
     }
   }
-  async function toggleKnowledgeArchive() {
-    if (!selectedKnowledge) return;
+  async function toggleKnowledgeArchive(target = selectedKnowledge) {
+    if (!target) return;
     try {
       const updated = await api<KnowledgeDetail>(
-        `/knowledge-bases/${selectedKnowledge.id}/archive`,
+        `/knowledge-bases/${target.id}/archive`,
         { method: "POST" },
       );
-      setSelectedKnowledge(updated);
+      if (selectedKnowledge?.id === target.id) setSelectedKnowledge(updated);
+      setPendingKnowledgeArchive(null);
       setNotice(
         updated.is_archived
           ? "知识库已归档，新的分析不会选择它"
@@ -734,10 +1146,16 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
     if (!selectedKnowledge) return;
     const form = new FormData(event.currentTarget);
     try {
-      const updated = await api<KnowledgeDetail>(`/knowledge-bases/${selectedKnowledge.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ name: form.get("name"), description: form.get("description") || "" }),
-      });
+      const updated = await api<KnowledgeDetail>(
+        `/knowledge-bases/${selectedKnowledge.id}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            name: form.get("name"),
+            description: form.get("description") || "",
+          }),
+        },
+      );
       setSelectedKnowledge(updated);
       setNotice("知识库信息已更新");
       await load();
@@ -753,8 +1171,12 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
       // Invalidate any list request that started before the deletion. Without
       // this, its stale response can put the deleted card back on screen.
       knowledgeRequestVersionRef.current += 1;
-      setKnowledge((current) => current.filter((item) => item.id !== target.id));
-      setDocuments((current) => current.filter((item) => item.knowledge_base_id !== target.id));
+      setKnowledge((current) =>
+        current.filter((item) => item.id !== target.id),
+      );
+      setDocuments((current) =>
+        current.filter((item) => item.knowledge_base_id !== target.id),
+      );
       setSelectedKnowledge(null);
       setPendingKnowledgeDelete(null);
       setNotice("知识库已删除");
@@ -785,7 +1207,9 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
   }
   async function retryDeadLetter(taskId: string) {
     try {
-      await api(`/ingestion-tasks/${taskId}/dead-letter/retry`, { method: "POST" });
+      await api(`/ingestion-tasks/${taskId}/dead-letter/retry`, {
+        method: "POST",
+      });
       setFailedTasks((current) => current.filter((task) => task.id !== taskId));
       setNotice("死信任务已重新入队");
     } catch (error) {
@@ -813,10 +1237,18 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
       setNotice(error instanceof Error ? error.message : "文档删除失败");
     }
   }
-  async function updateDocumentMetadata(document: Document, metadata: Record<string, unknown>) {
+  async function updateDocumentMetadata(
+    document: Document,
+    metadata: Record<string, unknown>,
+  ) {
     try {
-      const updated = await api<Document>(`/documents/${document.id}/metadata`, { method: "PATCH", body: JSON.stringify(metadata) });
-      setDocuments((current) => current.map((item) => item.id === updated.id ? updated : item));
+      const updated = await api<Document>(
+        `/documents/${document.id}/metadata`,
+        { method: "PATCH", body: JSON.stringify(metadata) },
+      );
+      setDocuments((current) =>
+        current.map((item) => (item.id === updated.id ? updated : item)),
+      );
       setNotice("指标口径已保存");
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "指标口径保存失败");
@@ -825,7 +1257,11 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
   }
   async function openDocumentSource(document: Document) {
     try {
-      setDocumentSource(await api<DocumentSource>(`/knowledge-bases/${document.knowledge_base_id}/documents/${document.id}/source`));
+      setDocumentSource(
+        await api<DocumentSource>(
+          `/knowledge-bases/${document.knowledge_base_id}/documents/${document.id}/source`,
+        ),
+      );
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "文档原文读取失败");
     }
@@ -881,7 +1317,9 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
   async function importDemoSources() {
     setBusy(true);
     try {
-      const imported = await api<Source[]>("/data-sources/import-demo", { method: "POST" });
+      const imported = await api<Source[]>("/data-sources/import-demo", {
+        method: "POST",
+      });
       setNotice(`演示数据源已导入，当前共 ${imported.length} 个数据源`);
       await load();
     } catch (error) {
@@ -900,20 +1338,30 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
   }
   async function syncSource(id: string) {
     try {
-      const result = await api<{ tables?: unknown[]; task_id?: string; status?: string }>(
-        `/data-sources/${id}/sync`,
-        { method: "POST" },
-      );
+      const result = await api<{
+        tables?: unknown[];
+        task_id?: string;
+        status?: string;
+      }>(`/data-sources/${id}/sync`, { method: "POST" });
       if (result.tables) {
         setNotice(`Schema 同步完成，共 ${result.tables.length} 张表`);
       } else if (result.task_id) {
         setNotice("Schema 同步已进入 Worker 队列");
         for (let attempt = 0; attempt < 20; attempt += 1) {
           await new Promise((resolve) => window.setTimeout(resolve, 1500));
-          const tasks = await api<{ id: string; status: string; error_message?: string }[]>(`/data-sources/${id}/sync-tasks`);
+          const tasks = await api<
+            { id: string; status: string; error_message?: string }[]
+          >(`/data-sources/${id}/sync-tasks`);
           const task = tasks.find((item) => item.id === result.task_id);
-          if (task?.status === "completed") { setNotice("Schema 同步完成"); await openSource(id); break; }
-          if (task?.status === "failed") { setNotice(`Schema 同步失败：${task.error_message || "未知原因"}`); break; }
+          if (task?.status === "completed") {
+            setNotice("Schema 同步完成");
+            await openSource(id);
+            break;
+          }
+          if (task?.status === "failed") {
+            setNotice(`Schema 同步失败：${task.error_message || "未知原因"}`);
+            break;
+          }
         }
       }
     } catch (error) {
@@ -929,7 +1377,16 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
           table_count: number;
           created_at: string;
         } | null>(`/data-sources/${id}/schema`),
-        api<{ id: string; status: string; started_at?: string; finished_at?: string; error_message?: string; celery_task_id?: string }[]>(`/data-sources/${id}/sync-tasks`),
+        api<
+          {
+            id: string;
+            status: string;
+            started_at?: string;
+            finished_at?: string;
+            error_message?: string;
+            celery_task_id?: string;
+          }[]
+        >(`/data-sources/${id}/sync-tasks`),
       ]);
       setSelectedSource(source);
       setSourceSchema(schema);
@@ -943,7 +1400,13 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
   async function saveAllowlist() {
     if (!selectedSource) return;
     try {
-      const updated = await api<Source>(`/data-sources/${selectedSource.id}/allowlist`, { method: "PATCH", body: JSON.stringify({ allowed_tables: allowlistDraft }) });
+      const updated = await api<Source>(
+        `/data-sources/${selectedSource.id}/allowlist`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ allowed_tables: allowlistDraft }),
+        },
+      );
       setSelectedSource(updated);
       setNotice("白名单已保存");
       await load();
@@ -969,7 +1432,17 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
       ]);
       setSelectedAnalysis(run);
       setAnalysisSteps(steps);
-      setAnalysisResult(run.result ? { run_id: run.id, sql: run.sql, sql_draft: run.sql_draft, guard_error: run.guard_error, result: run.result as AnalysisResult["result"] } : null);
+      setAnalysisResult(
+        run.result
+          ? {
+              run_id: run.id,
+              sql: run.sql,
+              sql_draft: run.sql_draft,
+              guard_error: run.guard_error,
+              result: run.result as AnalysisResult["result"],
+            }
+          : null,
+      );
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "分析详情读取失败");
     }
@@ -988,7 +1461,10 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
     setBusy(true);
     setEvents(["retry · 正在重新执行分析..."]);
     try {
-      const response = await fetch(`${API}/analyses/${id}/retry`, { method: "POST", headers });
+      const response = await fetch(`${API}/analyses/${id}/retry`, {
+        method: "POST",
+        headers,
+      });
       if (!response.ok) {
         const payload = await response.json().catch(() => ({}));
         throw new Error(String(payload.detail || "分析重试被拒绝"));
@@ -997,10 +1473,24 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
       const completed = parsed.find(({ event }) => event === "completed");
       const draft = parsed.find(({ event }) => event === "sql_draft");
       const failed = parsed.find(({ event }) => event === "failed");
-      if (completed) setAnalysisResult({ ...(completed.data as AnalysisResult), sql_draft: draft?.data.sql ? String(draft.data.sql) : undefined, guard_error: failed?.data.message ? String(failed.data.message) : undefined, trace_id: response.headers.get("x-trace-id") || undefined });
-      setEvents(parsed.map(({ event, data }) => `${event} · ${String(data.message || data.tool || data.run_id || (event === "completed" ? "分析完成" : "处理中"))}`));
+      if (completed)
+        setAnalysisResult({
+          ...(completed.data as AnalysisResult),
+          sql_draft: draft?.data.sql ? String(draft.data.sql) : undefined,
+          guard_error: failed?.data.message
+            ? String(failed.data.message)
+            : undefined,
+          trace_id: response.headers.get("x-trace-id") || undefined,
+        });
+      setEvents(
+        parsed.map(
+          ({ event, data }) =>
+            `${event} · ${String(data.message || data.tool || data.run_id || (event === "completed" ? "分析完成" : "处理中"))}`,
+        ),
+      );
       await load();
-      if (completed?.data.run_id) await openAnalysis(String(completed.data.run_id));
+      if (completed?.data.run_id)
+        await openAnalysis(String(completed.data.run_id));
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "分析重试失败");
     } finally {
@@ -1045,7 +1535,8 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
         for (let attempt = 0; attempt < 10; attempt += 1) {
           await new Promise((resolve) => window.setTimeout(resolve, 1500));
           await load();
-          if (attempt === 9) setNotice("大屏刷新任务已完成或仍在后台处理，可继续查看最新缓存");
+          if (attempt === 9)
+            setNotice("大屏刷新任务已完成或仍在后台处理，可继续查看最新缓存");
         }
       }
     } catch (error) {
@@ -1059,9 +1550,14 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
     if (!selectedSource) return;
     setBusy(true);
     try {
-      const result = await api<NonNullable<typeof sourceQueryResult>>(`/data-sources/${selectedSource.id}/query`, { method: "POST", body: JSON.stringify({ sql: sourceQuery }) });
+      const result = await api<NonNullable<typeof sourceQueryResult>>(
+        `/data-sources/${selectedSource.id}/query`,
+        { method: "POST", body: JSON.stringify({ sql: sourceQuery }) },
+      );
       setSourceQueryResult(result);
-      setNotice(`查询完成：${result.row_count} 行，耗时 ${result.elapsed_ms} ms`);
+      setNotice(
+        `查询完成：${result.row_count} 行，耗时 ${result.elapsed_ms} ms`,
+      );
     } catch (error) {
       setSourceQueryResult(null);
       setNotice(error instanceof Error ? error.message : "查询试跑失败");
@@ -1115,7 +1611,10 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
           expires_in_days: 7,
         }),
       });
-      if (invitation.token) setInvitationLink(`${window.location.origin}${window.location.pathname}?invite=${encodeURIComponent(invitation.token)}`);
+      if (invitation.token)
+        setInvitationLink(
+          `${window.location.origin}${window.location.pathname}?invite=${encodeURIComponent(invitation.token)}`,
+        );
       setNotice("邀请已创建，请复制一次性邀请链接并通过安全渠道发送。");
       event.currentTarget.reset();
       await load();
@@ -1153,7 +1652,10 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
         `/members/invitations/${invitation.id}/resend`,
         { method: "POST" },
       );
-      if (updated.token) setInvitationLink(`${window.location.origin}${window.location.pathname}?invite=${encodeURIComponent(updated.token)}`);
+      if (updated.token)
+        setInvitationLink(
+          `${window.location.origin}${window.location.pathname}?invite=${encodeURIComponent(updated.token)}`,
+        );
       setNotice("邀请已重发，请复制新的链接并通过安全渠道发送。旧链接已失效。");
       await load();
     } catch (error) {
@@ -1162,7 +1664,9 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
   }
   async function revokeInvitation(invitation: Invitation) {
     try {
-      await api<Invitation>(`/members/invitations/${invitation.id}/revoke`, { method: "POST" });
+      await api<Invitation>(`/members/invitations/${invitation.id}/revoke`, {
+        method: "POST",
+      });
       setNotice("邀请已撤销，历史记录已保留");
       await load();
     } catch (error) {
@@ -1170,43 +1674,90 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
     }
   }
   async function togglePlatformOrganization(item: PlatformOrganization) {
-    if (!window.confirm(`确认${item.is_active ? "停用" : "启用"}${item.name}？停用后该企业用户将无法访问系统。`)) return;
+    if (
+      !window.confirm(
+        `确认${item.is_active ? "停用" : "启用"}${item.name}？停用后该企业用户将无法访问系统。`,
+      )
+    )
+      return;
     try {
-      const updated = await api<PlatformOrganization>(`/platform/organizations/${item.id}/status`, { method: "POST", body: JSON.stringify({ is_active: !item.is_active }) });
-      setPlatformOrganizations((current) => current.map((organization) => organization.id === updated.id ? updated : organization));
+      const updated = await api<PlatformOrganization>(
+        `/platform/organizations/${item.id}/status`,
+        {
+          method: "POST",
+          body: JSON.stringify({ is_active: !item.is_active }),
+        },
+      );
+      setPlatformOrganizations((current) =>
+        current.map((organization) =>
+          organization.id === updated.id ? updated : organization,
+        ),
+      );
       setNotice(`企业已${updated.is_active ? "启用" : "停用"}`);
-    } catch (error) { setNotice(error instanceof Error ? error.message : "企业状态更新失败"); }
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "企业状态更新失败");
+    }
   }
-  async function renamePlatformOrganization(item: PlatformOrganization, name: string) {
+  async function renamePlatformOrganization(
+    item: PlatformOrganization,
+    name: string,
+  ) {
     try {
-      const updated = await api<PlatformOrganization>(`/platform/organizations/${item.id}`, { method: "PATCH", body: JSON.stringify({ name }) });
-      setPlatformOrganizations((current) => current.map((organization) => organization.id === updated.id ? updated : organization));
+      const updated = await api<PlatformOrganization>(
+        `/platform/organizations/${item.id}`,
+        { method: "PATCH", body: JSON.stringify({ name }) },
+      );
+      setPlatformOrganizations((current) =>
+        current.map((organization) =>
+          organization.id === updated.id ? updated : organization,
+        ),
+      );
       setNotice("企业名称已更新");
-    } catch (error) { setNotice(error instanceof Error ? error.message : "企业更新失败"); }
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "企业更新失败");
+    }
   }
   async function downloadReport(id: string, previewWindow?: Window | null) {
     try {
-      let response = await fetch(`${API}/reports/${id}/exports/pdf/download`, { headers });
+      let response = await fetch(`${API}/reports/${id}/exports/pdf/download`, {
+        headers,
+      });
       if (!response.ok && response.status === 404) {
         await api(`/reports/${id}/exports/pdf`, { method: "POST" });
         setNotice("PDF 已进入导出队列，正在等待生成...");
         for (let attempt = 0; attempt < 20; attempt += 1) {
           await new Promise((resolve) => window.setTimeout(resolve, 1500));
           const status = await api<ReportExport>(`/reports/${id}/exports/pdf`);
-          setReportExports((current) => [status, ...current.filter((item) => item.id !== status.id)]);
-        if (status.status === "failed") { previewWindow?.close(); return setNotice(`PDF 导出失败：${status.error_message || "未知原因"}`); }
+          setReportExports((current) => [
+            status,
+            ...current.filter((item) => item.id !== status.id),
+          ]);
+          if (status.status === "failed") {
+            previewWindow?.close();
+            return setNotice(
+              `PDF 导出失败：${status.error_message || "未知原因"}`,
+            );
+          }
           if (status.status === "completed") {
-            response = await fetch(`${API}/reports/${id}/exports/pdf/download`, { headers });
+            response = await fetch(
+              `${API}/reports/${id}/exports/pdf/download`,
+              { headers },
+            );
             break;
           }
         }
-        if (!response.ok) { previewWindow?.close(); return setNotice("PDF 仍在生成中，请稍后在报告详情中重试"); }
+        if (!response.ok) {
+          previewWindow?.close();
+          return setNotice("PDF 仍在生成中，请稍后在报告详情中重试");
+        }
       }
       if (!response.ok) {
         const payload = await response.json().catch(() => ({}));
         const trace = response.headers.get("x-trace-id");
         previewWindow?.close();
-        return setNotice(`${String(payload.detail || "PDF 下载失败，请稍后重试")}${trace ? `（Trace ID: ${trace}）` : ""}`);
+        return setNotice(
+          `${String(payload.detail || "PDF 下载失败，请稍后重试")}${trace ? `（Trace ID: ${trace}）` : ""}`,
+        );
       }
       const url = URL.createObjectURL(await response.blob());
       if (previewWindow) {
@@ -1223,20 +1774,29 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
       setNotice("PDF 下载已开始");
     } catch (error) {
       previewWindow?.close();
-      setNotice(error instanceof Error ? error.message : "PDF 下载失败，请稍后重试");
+      setNotice(
+        error instanceof Error ? error.message : "PDF 下载失败，请稍后重试",
+      );
     }
   }
   async function previewReport(id: string) {
     const previewWindow = window.open("", "_blank");
-    if (!previewWindow) return setNotice("浏览器阻止了预览窗口，请允许弹窗后重试。");
+    if (!previewWindow)
+      return setNotice("浏览器阻止了预览窗口，请允许弹窗后重试。");
     previewWindow.document.title = "SupplyMind PDF 预览";
     previewWindow.document.body.textContent = "正在准备 PDF，请勿关闭此窗口…";
     await downloadReport(id, previewWindow);
   }
   async function retryReportExport(reportId: string, exportId: string) {
     try {
-      const updated = await api<ReportExport>(`/reports/${reportId}/exports/${exportId}/retry`, { method: "POST" });
-      setReportExports((current) => [updated, ...current.filter((item) => item.id !== updated.id)]);
+      const updated = await api<ReportExport>(
+        `/reports/${reportId}/exports/${exportId}/retry`,
+        { method: "POST" },
+      );
+      setReportExports((current) => [
+        updated,
+        ...current.filter((item) => item.id !== updated.id),
+      ]);
       setNotice("PDF 导出已重新排队");
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "PDF 重试失败");
@@ -1253,11 +1813,64 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
     setToken("");
   }
   if (!token)
-    return <AuthScreen inviteToken={inviteToken} loginEmail={loginEmail} loginPassword={loginPassword} loginOrganization={loginOrganization} showPassword={showLoginPassword} loginBusy={loginBusy} oidcBusy={oidcBusy} loginError={loginError} inviteError={inviteError} onLogin={login} onAcceptInvitation={acceptInvitation} onStartOidc={() => void startOidc()} onEmailChange={setLoginEmail} onPasswordChange={setLoginPassword} onOrganizationChange={setLoginOrganization} onTogglePassword={() => setShowLoginPassword((value) => !value)} />;
+    return (
+      <AuthScreen
+        inviteToken={inviteToken}
+        loginEmail={loginEmail}
+        loginPassword={loginPassword}
+        loginOrganization={loginOrganization}
+        showPassword={showLoginPassword}
+        loginBusy={loginBusy}
+        oidcBusy={oidcBusy}
+        loginError={loginError}
+        inviteError={inviteError}
+        onLogin={login}
+        onAcceptInvitation={acceptInvitation}
+        onStartOidc={() => void startOidc()}
+        onEmailChange={setLoginEmail}
+        onPasswordChange={setLoginPassword}
+        onOrganizationChange={setLoginOrganization}
+        onTogglePassword={() => setShowLoginPassword((value) => !value)}
+      />
+    );
   function page() {
-    if (nav === "企业管理") return <PlatformOrganizationsPage organizations={platformOrganizations} busy={busy} onToggle={(item) => void togglePlatformOrganization(item)} onRename={(item, name) => void renamePlatformOrganization(item, name)} />;
-    if (nav === "大屏配置") return <DashboardConfigurationPage config={dashboardConfig} busy={busy} onSave={(seconds, widgets) => void saveDashboardConfig(seconds, widgets)} />;
-    if (nav === "组织与审计") return <OrganizationAuditPage members={members} invitations={invitations} auditEvents={auditEvents} organization={organization} auditFilter={auditFilter} auditRunId={auditRunId} setAuditFilter={setAuditFilter} setAuditRunId={setAuditRunId} onInvite={inviteMember} onRoleChange={updateMemberRole} onToggle={toggleMember} onResend={resendInvitation} onRevoke={revokeInvitation} selectedAudit={selectedAudit} setSelectedAudit={setSelectedAudit} invitationLink={invitationLink} onDismissInvitationLink={() => setInvitationLink(null)} />;
+    if (nav === "企业管理")
+      return (
+        <PlatformOrganizationsPage
+          organizations={platformOrganizations}
+          onToggle={togglePlatformOrganization}
+          onRename={renamePlatformOrganization}
+        />
+      );
+    if (nav === "大屏配置")
+      return (
+        <DashboardConfigurationPage
+          config={dashboardConfig}
+          onSave={saveDashboardConfig}
+        />
+      );
+    if (nav === "组织与审计")
+      return (
+        <OrganizationAuditPage
+          members={members}
+          invitations={invitations}
+          auditEvents={auditEvents}
+          organization={organization}
+          auditFilter={auditFilter}
+          auditRunId={auditRunId}
+          setAuditFilter={setAuditFilter}
+          setAuditRunId={setAuditRunId}
+          onInvite={inviteMember}
+          onRoleChange={updateMemberRole}
+          onToggle={toggleMember}
+          onResend={resendInvitation}
+          onRevoke={revokeInvitation}
+          selectedAudit={selectedAudit}
+          setSelectedAudit={setSelectedAudit}
+          invitationLink={invitationLink}
+          onDismissInvitationLink={() => setInvitationLink(null)}
+        />
+      );
     if (nav === "__legacy_org__")
       return (
         <DataView
@@ -1415,7 +2028,35 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
           </section>
         </DataView>
       );
-    if (nav === "项目管理") return <ProjectManagementPage organization={organization} members={members} sources={sources} knowledgeBases={knowledge} reports={reports} permissions={permissions} quotas={quotaDraft} setQuotas={setQuotaDraft} busy={busy} onNavigate={selectNav} onUpdateOwner={(event) => void updateOwner(event)} onOwnerChange={(userId) => setOrganization(organization ? { ...organization, owner_user_id: userId, owner_name: members.find((member) => member.user_id === userId)?.display_name || null } : organization)} onUpdateQuotas={(event) => void updateQuotas(event)} />;
+    if (nav === "项目管理")
+      return (
+        <ProjectManagementPage
+          organization={organization}
+          members={members}
+          sources={sources}
+          knowledgeBases={knowledge}
+          reports={reports}
+          permissions={permissions}
+          quotas={quotaDraft}
+          setQuotas={setQuotaDraft}
+          onNavigate={selectNav}
+          onUpdateOwner={updateOwner}
+          onOwnerChange={(userId) =>
+            setOrganization(
+              organization
+                ? {
+                    ...organization,
+                    owner_user_id: userId,
+                    owner_name:
+                      members.find((member) => member.user_id === userId)
+                        ?.display_name || null,
+                  }
+                : organization,
+            )
+          }
+          onUpdateQuotas={updateQuotas}
+        />
+      );
     if (nav === "__legacy_project_markup__")
       return (
         <DataView
@@ -1439,7 +2080,10 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
               <strong>
                 {organization?.data_source_count ?? sources.length}
               </strong>
-              <button className="text-button" onClick={() => selectNav("数据源")}>
+              <button
+                className="text-button"
+                onClick={() => selectNav("数据源")}
+              >
                 查看数据源 →
               </button>
             </article>
@@ -1448,7 +2092,10 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
               <strong>
                 {organization?.knowledge_base_count ?? knowledge.length}
               </strong>
-              <button className="text-button" onClick={() => selectNav("知识库")}>
+              <button
+                className="text-button"
+                onClick={() => selectNav("知识库")}
+              >
                 维护知识库 →
               </button>
             </article>
@@ -1494,23 +2141,62 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
             </div>
           </section>
           <section className="project-management-grid">
-            <form className="quota-form" onSubmit={(event) => void updateOwner(event)}>
+            <form
+              className="quota-form"
+              onSubmit={(event) => void updateOwner(event)}
+            >
               <div className="panel-heading">
-                <div><p className="section-kicker">ORGANIZATION / OWNER</p><h3>企业负责人</h3></div>
+                <div>
+                  <p className="section-kicker">ORGANIZATION / OWNER</p>
+                  <h3>企业负责人</h3>
+                </div>
                 <span className="panel-meta">仅组织管理员可修改</span>
               </div>
               <label>
                 负责人
                 <select
                   value={organization?.owner_user_id || ""}
-                  disabled={(organization?.role !== "org_admin" && organization?.role !== "platform_admin") || busy}
-                  onChange={(event) => setOrganization(organization ? { ...organization, owner_user_id: event.target.value, owner_name: members.find((member) => member.user_id === event.target.value)?.display_name || null } : organization)}
+                  disabled={
+                    (organization?.role !== "org_admin" &&
+                      organization?.role !== "platform_admin") ||
+                    busy
+                  }
+                  onChange={(event) =>
+                    setOrganization(
+                      organization
+                        ? {
+                            ...organization,
+                            owner_user_id: event.target.value,
+                            owner_name:
+                              members.find(
+                                (member) =>
+                                  member.user_id === event.target.value,
+                              )?.display_name || null,
+                          }
+                        : organization,
+                    )
+                  }
                 >
                   <option value="">请选择组织成员</option>
-                  {members.filter((member) => member.is_active).map((member) => <option key={member.user_id} value={member.user_id}>{member.display_name} · {member.email}</option>)}
+                  {members
+                    .filter((member) => member.is_active)
+                    .map((member) => (
+                      <option key={member.user_id} value={member.user_id}>
+                        {member.display_name} · {member.email}
+                      </option>
+                    ))}
                 </select>
               </label>
-              <button className="primary-button" disabled={(organization?.role !== "org_admin" && organization?.role !== "platform_admin") || busy}>保存负责人</button>
+              <button
+                className="primary-button"
+                disabled={
+                  (organization?.role !== "org_admin" &&
+                    organization?.role !== "platform_admin") ||
+                  busy
+                }
+              >
+                保存负责人
+              </button>
             </form>
             <form
               className="quota-form"
@@ -1595,7 +2281,8 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
                 </div>
               </div>
               <div className="permission-table">
-                {Object.entries(permissions?.roles ?? {}).map(([role, actions]) => (
+                {Object.entries(permissions?.roles ?? {}).map(
+                  ([role, actions]) => (
                     <div className="permission-row" key={role}>
                       <strong>{role}</strong>
                       <span>
@@ -1605,13 +2292,62 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
                           .join(" · ") || "仅查看授权资源"}
                       </span>
                     </div>
-                  ))}
+                  ),
+                )}
               </div>
             </section>
           </section>
         </DataView>
       );
-    if (nav === "数据源") return <DataSourcesPage busy={busy} sources={sources} draft={sourceDraft} setDraft={setSourceDraft} onImportDemo={() => void importDemoSources()} onCreate={(event) => void createSource(event)} onOpen={(id) => void openSource(id)} onTest={(id) => void testSource(id)} onSync={(id) => void syncSource(id)} onToggle={(id) => void toggleSource(id)}>{selectedSource && <DataSourceDetail source={selectedSource} schema={sourceSchema} tasks={sourceSyncTasks} selectedTable={selectedSchemaTable} onSelectTable={(name) => void (async () => { try { setSelectedSchemaTable(await api<SchemaTable>(`/data-sources/${selectedSource.id}/schema/tables/${encodeURIComponent(name)}`)); } catch (error) { setNotice(error instanceof Error ? error.message : "无法读取表结构"); } })()} allowlist={allowlistDraft} setAllowlist={setAllowlistDraft} onSaveAllowlist={() => void saveAllowlist()} canManage={["org_admin", "platform_admin"].includes(organization?.role || "")} query={sourceQuery} setQuery={setSourceQuery} onRunQuery={(event) => void runSourceQuery(event)} result={sourceQueryResult} onClose={() => setSelectedSource(null)} />}</DataSourcesPage>;
+    if (nav === "数据源")
+      return (
+        <DataSourcesPage
+          sources={sources}
+          draft={sourceDraft}
+          setDraft={setSourceDraft}
+          onImportDemo={() => void importDemoSources()}
+          onCreate={(event) => void createSource(event)}
+          onOpen={(id) => void openSource(id)}
+          onTest={(id) => void testSource(id)}
+          onSync={(id) => void syncSource(id)}
+          onToggle={(id) => void toggleSource(id)}
+        >
+          {selectedSource && (
+            <DataSourceDetail
+              source={selectedSource}
+              schema={sourceSchema}
+              tasks={sourceSyncTasks}
+              selectedTable={selectedSchemaTable}
+              onSelectTable={(name) =>
+                void (async () => {
+                  try {
+                    setSelectedSchemaTable(
+                      await api<SchemaTable>(
+                        `/data-sources/${selectedSource.id}/schema/tables/${encodeURIComponent(name)}`,
+                      ),
+                    );
+                  } catch (error) {
+                    setNotice(
+                      error instanceof Error ? error.message : "无法读取表结构",
+                    );
+                  }
+                })()
+              }
+              allowlist={allowlistDraft}
+              setAllowlist={setAllowlistDraft}
+              onSaveAllowlist={() => void saveAllowlist()}
+              canManage={["org_admin", "platform_admin"].includes(
+                organization?.role || "",
+              )}
+              query={sourceQuery}
+              setQuery={setSourceQuery}
+              onRunQuery={(event) => void runSourceQuery(event)}
+              result={sourceQueryResult}
+              onClose={() => setSelectedSource(null)}
+            />
+          )}
+        </DataSourcesPage>
+      );
     if (nav === "__legacy_data_source_markup__")
       return (
         <DataView
@@ -1619,9 +2355,30 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
           title="数据源"
           copy="管理组织授权的数据连接与表白名单。"
         >
-          <div className="source-page-actions"><div><p className="section-kicker">SOURCE / ONBOARDING</p><strong>先导入演示数据，或接入你的只读数据库</strong><small>导入后仍需测试连接并同步 Schema，分析只使用已启用且通过白名单校验的数据源。</small></div><button className="secondary-button" onClick={() => void importDemoSources()} disabled={busy}>一键导入演示数据</button></div>
+          <div className="source-page-actions">
+            <div>
+              <p className="section-kicker">SOURCE / ONBOARDING</p>
+              <strong>先导入演示数据，或接入你的只读数据库</strong>
+              <small>
+                导入后仍需测试连接并同步
+                Schema，分析只使用已启用且通过白名单校验的数据源。
+              </small>
+            </div>
+            <button
+              className="secondary-button"
+              onClick={() => void importDemoSources()}
+              disabled={busy}
+            >
+              一键导入演示数据
+            </button>
+          </div>
           <form className="source-form" onSubmit={createSource}>
-            <div className="source-wizard-steps" aria-label="数据源接入步骤"><span className="active">1 连接信息</span><span>2 TLS / 网络</span><span>3 Schema 同步</span><span>4 白名单确认</span></div>
+            <div className="source-wizard-steps" aria-label="数据源接入步骤">
+              <span className="active">1 连接信息</span>
+              <span>2 TLS / 网络</span>
+              <span>3 Schema 同步</span>
+              <span>4 白名单确认</span>
+            </div>
             <input
               required
               placeholder="名称"
@@ -1694,12 +2451,20 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
                 setSourceDraft({ ...sourceDraft, password: e.target.value })
               }
             />
-            <p className="detail-hint source-form-hint">创建后先测试连接并同步 Schema，再从快照中勾选分析白名单。</p>
+            <p className="detail-hint source-form-hint">
+              创建后先测试连接并同步 Schema，再从快照中勾选分析白名单。
+            </p>
             <button className="primary-button" disabled={busy}>
               接入只读数据源
             </button>
           </form>
-          <SourceList sources={sources} onOpen={(id) => void openSource(id)} onTest={(id) => void testSource(id)} onSync={(id) => void syncSource(id)} onToggle={(id) => void toggleSource(id)} />
+          <SourceList
+            sources={sources}
+            onOpen={(id) => void openSource(id)}
+            onTest={(id) => void testSource(id)}
+            onSync={(id) => void syncSource(id)}
+            onToggle={(id) => void toggleSource(id)}
+          />
           {selectedSource && (
             <section className="detail-panel">
               <div className="panel-heading">
@@ -1734,10 +2499,76 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
                 </span>
               </div>
               <div className="allowlist-editor">
-                <div className="panel-heading"><div><h4>分析白名单</h4><p className="detail-hint">只能选择最近一次 Schema 快照中的表。</p></div><button className="secondary-button" onClick={() => void saveAllowlist()} disabled={organization?.role !== "org_admin" && organization?.role !== "platform_admin"}>保存白名单</button></div>
-                <div className="allowlist-grid">{(sourceSchema?.tables || []).map((table) => { const tableName = table.name || table.table_name || ""; return <label key={tableName}><input type="checkbox" checked={allowlistDraft.includes(tableName)} onChange={(event) => setAllowlistDraft((current) => event.target.checked ? [...new Set([...current, tableName])] : current.filter((item) => item !== tableName))} />{tableName}</label>; })}</div>
+                <div className="panel-heading">
+                  <div>
+                    <h4>分析白名单</h4>
+                    <p className="detail-hint">
+                      只能选择最近一次 Schema 快照中的表。
+                    </p>
+                  </div>
+                  <button
+                    className="secondary-button"
+                    onClick={() => void saveAllowlist()}
+                    disabled={
+                      organization?.role !== "org_admin" &&
+                      organization?.role !== "platform_admin"
+                    }
+                  >
+                    保存白名单
+                  </button>
+                </div>
+                <div className="allowlist-grid">
+                  {(sourceSchema?.tables || []).map((table) => {
+                    const tableName = table.name || table.table_name || "";
+                    return (
+                      <label key={tableName}>
+                        <input
+                          type="checkbox"
+                          checked={allowlistDraft.includes(tableName)}
+                          onChange={(event) =>
+                            setAllowlistDraft((current) =>
+                              event.target.checked
+                                ? [...new Set([...current, tableName])]
+                                : current.filter((item) => item !== tableName),
+                            )
+                          }
+                        />
+                        {tableName}
+                      </label>
+                    );
+                  })}
+                </div>
               </div>
-              <section className="sync-task-panel"><div className="panel-heading"><div><h4>Schema 同步任务</h4><p className="detail-hint">记录最近任务状态、任务 ID 和失败原因。</p></div></div>{sourceSyncTasks.length ? sourceSyncTasks.slice(0, 5).map((task) => <div className="sync-task-row" key={task.id}><strong>{task.status}</strong><span>{task.celery_task_id || task.id}</span><time>{task.finished_at ? new Date(task.finished_at).toLocaleString("zh-CN") : task.started_at ? new Date(task.started_at).toLocaleString("zh-CN") : "等待开始"}</time>{task.error_message && <small>{task.error_message}</small>}</div>) : <p className="detail-hint">尚未发起 Schema 同步。</p>}</section>
+              <section className="sync-task-panel">
+                <div className="panel-heading">
+                  <div>
+                    <h4>Schema 同步任务</h4>
+                    <p className="detail-hint">
+                      记录最近任务状态、任务 ID 和失败原因。
+                    </p>
+                  </div>
+                </div>
+                {sourceSyncTasks.length ? (
+                  sourceSyncTasks.slice(0, 5).map((task) => (
+                    <div className="sync-task-row" key={task.id}>
+                      <strong>{task.status}</strong>
+                      <span>{task.celery_task_id || task.id}</span>
+                      <time>
+                        {task.finished_at
+                          ? new Date(task.finished_at).toLocaleString("zh-CN")
+                          : task.started_at
+                            ? new Date(task.started_at).toLocaleString("zh-CN")
+                            : "等待开始"}
+                      </time>
+                      {task.error_message && (
+                        <small>{task.error_message}</small>
+                      )}
+                    </div>
+                  ))
+                ) : (
+                  <p className="detail-hint">尚未发起 Schema 同步。</p>
+                )}
+              </section>
               <h4>
                 Schema 快照{" "}
                 {sourceSchema ? `· ${sourceSchema.table_count} 张表` : ""}
@@ -1746,22 +2577,34 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
                 <div className="schema-browser">
                   <div className="schema-table-list">
                     {sourceSchema.tables.map((table) => {
-                      const tableName = table.name || table.table_name || "未命名表";
+                      const tableName =
+                        table.name || table.table_name || "未命名表";
                       return (
                         <button
                           className={`schema-table-item ${selectedSchemaTable === table ? "selected" : ""}`}
                           key={tableName}
-                          onClick={() => void (async () => {
-                            try {
-                              const detail = await api<SchemaTable>(`/data-sources/${selectedSource.id}/schema/tables/${encodeURIComponent(tableName)}`);
-                              setSelectedSchemaTable(detail);
-                            } catch (error) {
-                              setNotice(error instanceof Error ? error.message : "无法读取表结构");
-                            }
-                          })()}
+                          onClick={() =>
+                            void (async () => {
+                              try {
+                                const detail = await api<SchemaTable>(
+                                  `/data-sources/${selectedSource.id}/schema/tables/${encodeURIComponent(tableName)}`,
+                                );
+                                setSelectedSchemaTable(detail);
+                              } catch (error) {
+                                setNotice(
+                                  error instanceof Error
+                                    ? error.message
+                                    : "无法读取表结构",
+                                );
+                              }
+                            })()
+                          }
                         >
                           <strong>{tableName}</strong>
-                          <span>{table.columns?.length || 0} 列 · {table.primary_key?.length ? "含主键" : "无主键"}</span>
+                          <span>
+                            {table.columns?.length || 0} 列 ·{" "}
+                            {table.primary_key?.length ? "含主键" : "无主键"}
+                          </span>
                         </button>
                       );
                     })}
@@ -1769,36 +2612,195 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
                   {selectedSchemaTable ? (
                     <div className="schema-table-detail">
                       <div className="detail-meta">
-                        <span>主键：{selectedSchemaTable.primary_key?.join(" · ") || "无"}</span>
-                        <span>外键：{selectedSchemaTable.foreign_keys?.length || 0}</span>
-                        <span>索引：{selectedSchemaTable.indexes?.length || 0}</span>
-                        <span>采样上限：{selectedSchemaTable.sample_limit || 100} 行</span>
+                        <span>
+                          主键：
+                          {selectedSchemaTable.primary_key?.join(" · ") || "无"}
+                        </span>
+                        <span>
+                          外键：{selectedSchemaTable.foreign_keys?.length || 0}
+                        </span>
+                        <span>
+                          索引：{selectedSchemaTable.indexes?.length || 0}
+                        </span>
+                        <span>
+                          采样上限：{selectedSchemaTable.sample_limit || 100} 行
+                        </span>
                       </div>
-                      {selectedSchemaTable.comment && <p className="detail-hint">表注释：{selectedSchemaTable.comment}</p>}
+                      {selectedSchemaTable.comment && (
+                        <p className="detail-hint">
+                          表注释：{selectedSchemaTable.comment}
+                        </p>
+                      )}
                       <table className="result-table">
-                        <thead><tr><th>列名</th><th>类型</th><th>可为空</th><th>注释</th></tr></thead>
-                        <tbody>{(selectedSchemaTable.columns || []).map((column) => <tr key={column.name}><td>{column.name}</td><td>{column.type}</td><td>{column.nullable ? "是" : "否"}</td><td>{column.comment || "—"}</td></tr>)}</tbody>
+                        <thead>
+                          <tr>
+                            <th>列名</th>
+                            <th>类型</th>
+                            <th>可为空</th>
+                            <th>注释</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(selectedSchemaTable.columns || []).map((column) => (
+                            <tr key={column.name}>
+                              <td>{column.name}</td>
+                              <td>{column.type}</td>
+                              <td>{column.nullable ? "是" : "否"}</td>
+                              <td>{column.comment || "—"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
                       </table>
-                      {selectedSchemaTable.foreign_keys?.length ? <div className="schema-foreign-keys"><strong>外键关系</strong>{selectedSchemaTable.foreign_keys.map((key, index) => <span key={index}>{(key.constrained_columns || []).join(", ")} → {key.referred_table || "?"}.{(key.referred_columns || []).join(", ")}</span>)}</div> : null}
+                      {selectedSchemaTable.foreign_keys?.length ? (
+                        <div className="schema-foreign-keys">
+                          <strong>外键关系</strong>
+                          {selectedSchemaTable.foreign_keys.map(
+                            (key, index) => (
+                              <span key={index}>
+                                {(key.constrained_columns || []).join(", ")} →{" "}
+                                {key.referred_table || "?"}.
+                                {(key.referred_columns || []).join(", ")}
+                              </span>
+                            ),
+                          )}
+                        </div>
+                      ) : null}
                     </div>
-                  ) : <p className="detail-hint">选择一张表查看列、主键和外键。</p>}
+                  ) : (
+                    <p className="detail-hint">
+                      选择一张表查看列、主键和外键。
+                    </p>
+                  )}
                 </div>
-              ) : <p className="detail-hint">尚无快照，请先同步 Schema。</p>}
-              <form className="knowledge-search" onSubmit={(event) => void runSourceQuery(event)}>
-                <label>只读查询试跑<textarea value={sourceQuery} onChange={(event) => setSourceQuery(event.target.value)} rows={4} aria-label="只读查询 SQL" /></label>
-                <button className="primary-button" disabled={busy || selectedSource.status === "disabled" || !["analyst", "org_admin", "platform_admin"].includes(organization?.role || "")}>执行 Guard 查询</button>
+              ) : (
+                <p className="detail-hint">尚无快照，请先同步 Schema。</p>
+              )}
+              <form
+                className="knowledge-search"
+                onSubmit={(event) => void runSourceQuery(event)}
+              >
+                <label>
+                  只读查询试跑
+                  <textarea
+                    value={sourceQuery}
+                    onChange={(event) => setSourceQuery(event.target.value)}
+                    rows={4}
+                    aria-label="只读查询 SQL"
+                  />
+                </label>
+                <button
+                  className="primary-button"
+                  disabled={
+                    busy ||
+                    selectedSource.status === "disabled" ||
+                    !["analyst", "org_admin", "platform_admin"].includes(
+                      organization?.role || "",
+                    )
+                  }
+                >
+                  执行 Guard 查询
+                </button>
               </form>
-              {sourceQueryResult && <section className="detail-panel">
-                <div className="detail-meta"><span>耗时：{sourceQueryResult.elapsed_ms} ms</span><span>行数：{sourceQueryResult.row_count} / {sourceQueryResult.max_rows}</span><span>表：{sourceQueryResult.tables.join(" · ")}</span><span>脱敏：{sourceQueryResult.redacted ? "已启用" : "未启用"}</span></div>
-                <pre className="sql-preview">{sourceQueryResult.sql}</pre>
-                <pre className="schema-preview">{JSON.stringify(sourceQueryResult.rows, null, 2)}</pre>
-              </section>}
+              {sourceQueryResult && (
+                <section className="detail-panel">
+                  <div className="detail-meta">
+                    <span>耗时：{sourceQueryResult.elapsed_ms} ms</span>
+                    <span>
+                      行数：{sourceQueryResult.row_count} /{" "}
+                      {sourceQueryResult.max_rows}
+                    </span>
+                    <span>表：{sourceQueryResult.tables.join(" · ")}</span>
+                    <span>
+                      脱敏：{sourceQueryResult.redacted ? "已启用" : "未启用"}
+                    </span>
+                  </div>
+                  <pre className="sql-preview">{sourceQueryResult.sql}</pre>
+                  <pre className="schema-preview">
+                    {JSON.stringify(sourceQueryResult.rows, null, 2)}
+                  </pre>
+                </section>
+              )}
             </section>
           )}
         </DataView>
       );
-    if (nav === "系统状态") return <SystemStatusPage details={systemDetails as SystemStatusData | null} showDeadLetters={Boolean(organization && ["org_admin", "platform_admin"].includes(organization.role))} failedTasks={failedTasks} onRetry={(id) => void retryDeadLetter(id)} />;
-    if (nav === "知识库") return <KnowledgeBasePage filter={knowledgeFilter} setFilter={setKnowledgeFilter} page={knowledgePage} pageSize={knowledgePageSize} hasMore={knowledgeHasMore} setPage={setKnowledgePage} setPageSize={setKnowledgePageSize} knowledgeBases={knowledge} documents={documents} busy={busy} onCreate={(event) => void createKnowledge(event)} onUpload={uploadDocument} onAnalyze={(name) => { setQuestion(`${name}中的指标口径与当前供应链风险`); selectNav("分析会话"); }} onManage={(id) => void openKnowledge(id)} selected={selectedKnowledge} onCloseDetail={() => setSelectedKnowledge(null)} onToggleArchive={() => void toggleKnowledgeArchive()} onRequestDelete={() => setPendingKnowledgeDelete(selectedKnowledge)} onUpdate={(event) => void updateKnowledge(event)} query={knowledgeQuery} setQuery={setKnowledgeQuery} onSearch={(event) => void searchKnowledge(event)} citations={knowledgeCitations} role={organization?.role} onSource={(document) => { const full = documents.find((item) => item.id === document.id); if (full) void openDocumentSource(full); }} onRetry={(id) => void retryIngestion(id)} onCancel={(id) => void cancelIngestion(id)} onArchiveDocument={(document) => { const full = documents.find((item) => item.id === document.id); if (full) void toggleDocumentArchive(full); }} onDeleteDocument={(document) => { const full = documents.find((item) => item.id === document.id); if (full) void deleteDocument(full); }} onReplace={(document, file) => { const full = documents.find((item) => item.id === document.id); return full ? replaceDocument(full, file) : Promise.reject(new Error("文档不存在")); }} onMetadata={(document, metadata) => { const full = documents.find((item) => item.id === document.id); return full ? updateDocumentMetadata(full, metadata) : Promise.reject(new Error("文档不存在")); }} source={documentSource} onCloseSource={() => setDocumentSource(null)} />;
+    if (nav === "系统状态")
+      return (
+        <SystemStatusPage
+          details={systemDetails as SystemStatusData | null}
+          showDeadLetters={Boolean(
+            organization &&
+            ["org_admin", "platform_admin"].includes(organization.role),
+          )}
+          failedTasks={failedTasks}
+          onRetry={(id) => void retryDeadLetter(id)}
+        />
+      );
+    if (nav === "知识库")
+      return (
+        <KnowledgeBasePage
+          filter={knowledgeFilter}
+          setFilter={setKnowledgeFilter}
+          page={knowledgePage}
+          pageSize={knowledgePageSize}
+          hasMore={knowledgeHasMore}
+          setPage={setKnowledgePage}
+          setPageSize={setKnowledgePageSize}
+          knowledgeBases={knowledge}
+          documents={documents}
+          busy={busy}
+          onCreate={(event) => void createKnowledge(event)}
+          onUpload={uploadDocument}
+          onAnalyze={(name) => {
+            setQuestion(`${name}中的指标口径与当前供应链风险`);
+            selectNav("分析会话");
+          }}
+          onManage={(id) => void openKnowledge(id)}
+          selected={selectedKnowledge}
+          onCloseDetail={() => setSelectedKnowledge(null)}
+          onToggleArchive={() => void toggleKnowledgeArchive()}
+          onRequestArchive={() =>
+            selectedKnowledge && setPendingKnowledgeArchive(selectedKnowledge)
+          }
+          onRequestDelete={() =>
+            selectedKnowledge && setPendingKnowledgeDelete(selectedKnowledge)
+          }
+          onUpdate={(event) => void updateKnowledge(event)}
+          query={knowledgeQuery}
+          setQuery={setKnowledgeQuery}
+          onSearch={(event) => void searchKnowledge(event)}
+          citations={knowledgeCitations}
+          role={organization?.role}
+          onSource={(document) => {
+            const full = documents.find((item) => item.id === document.id);
+            if (full) void openDocumentSource(full);
+          }}
+          onRetry={(id) => void retryIngestion(id)}
+          onCancel={(id) => void cancelIngestion(id)}
+          onArchiveDocument={(document) => {
+            const full = documents.find((item) => item.id === document.id);
+            if (full) void toggleDocumentArchive(full);
+          }}
+          onDeleteDocument={(document) => {
+            const full = documents.find((item) => item.id === document.id);
+            if (full) void deleteDocument(full);
+          }}
+          onReplace={(document, file) => {
+            const full = documents.find((item) => item.id === document.id);
+            return full
+              ? replaceDocument(full, file)
+              : Promise.reject(new Error("文档不存在"));
+          }}
+          onMetadata={(document, metadata) => {
+            const full = documents.find((item) => item.id === document.id);
+            return full
+              ? updateDocumentMetadata(full, metadata)
+              : Promise.reject(new Error("文档不存在"));
+          }}
+          source={documentSource}
+          onCloseSource={() => setDocumentSource(null)}
+        />
+      );
     if (nav === "__legacy_knowledge_markup__")
       return (
         <DataView
@@ -1806,7 +2808,35 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
           title="知识库"
           copy="维护指标口径、制造规则与可追溯引用。"
         >
-          <div className="report-filters knowledge-filters"><input value={knowledgeFilter.name} onChange={(event) => { setKnowledgePage(1); setKnowledgeFilter({ ...knowledgeFilter, name: event.target.value }); }} placeholder="按知识库名称筛选" aria-label="按知识库名称筛选" /><select value={knowledgeFilter.status} onChange={(event) => { setKnowledgePage(1); setKnowledgeFilter({ ...knowledgeFilter, status: event.target.value }); }} aria-label="按知识库状态筛选"><option value="">全部状态</option><option value="active">启用</option><option value="archived">已归档</option></select></div>
+          <div className="report-filters knowledge-filters">
+            <input
+              value={knowledgeFilter.name}
+              onChange={(event) => {
+                setKnowledgePage(1);
+                setKnowledgeFilter({
+                  ...knowledgeFilter,
+                  name: event.target.value,
+                });
+              }}
+              placeholder="按知识库名称筛选"
+              aria-label="按知识库名称筛选"
+            />
+            <select
+              value={knowledgeFilter.status}
+              onChange={(event) => {
+                setKnowledgePage(1);
+                setKnowledgeFilter({
+                  ...knowledgeFilter,
+                  status: event.target.value,
+                });
+              }}
+              aria-label="按知识库状态筛选"
+            >
+              <option value="">全部状态</option>
+              <option value="active">启用</option>
+              <option value="archived">已归档</option>
+            </select>
+          </div>
           <form
             className="inline-form knowledge-create"
             onSubmit={createKnowledge}
@@ -1843,7 +2873,6 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
                   documents={documents.filter(
                     (document) => document.knowledge_base_id === k.id,
                   )}
-                  busy={busy}
                   onUpload={uploadDocument}
                   onAnalyze={() => {
                     setQuestion(`${k.name}中的指标口径与当前供应链风险`);
@@ -1859,7 +2888,20 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
               copy="创建知识库后上传 PDF、Markdown 或 TXT 文档。"
             />
           )}
-          <Pagination page={knowledgePage} pageSize={knowledgePageSize} total={(knowledgePage - 1) * knowledgePageSize + knowledge.length + (knowledgeHasMore ? 1 : 0)} onPageChange={setKnowledgePage} onPageSizeChange={(size) => { setKnowledgePageSize(size); setKnowledgePage(1); }} />
+          <Pagination
+            page={knowledgePage}
+            pageSize={knowledgePageSize}
+            total={
+              (knowledgePage - 1) * knowledgePageSize +
+              knowledge.length +
+              (knowledgeHasMore ? 1 : 0)
+            }
+            onPageChange={setKnowledgePage}
+            onPageSizeChange={(size) => {
+              setKnowledgePageSize(size);
+              setKnowledgePage(1);
+            }}
+          />
           {selectedKnowledge && (
             <section className="knowledge-detail">
               <div className="panel-heading">
@@ -1869,11 +2911,52 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
                   <p>{selectedKnowledge.description || "暂无用途说明"}</p>
                 </div>
                 <div className="row-actions">
-                  <button className="secondary-button" onClick={() => void toggleKnowledgeArchive()}>{selectedKnowledge.is_archived ? "恢复知识库" : "归档知识库"}</button>
-                  {selectedKnowledge.is_archived && documents.filter((document) => document.knowledge_base_id === selectedKnowledge.id && !document.is_archived).length === 0 && <button className="text-button danger-action" onClick={() => setPendingKnowledgeDelete(selectedKnowledge)}>删除知识库</button>}
+                  <button
+                    className="secondary-button"
+                    onClick={() => void toggleKnowledgeArchive()}
+                  >
+                    {selectedKnowledge.is_archived
+                      ? "恢复知识库"
+                      : "归档知识库"}
+                  </button>
+                  {selectedKnowledge.is_archived &&
+                    documents.filter(
+                      (document) =>
+                        document.knowledge_base_id === selectedKnowledge.id &&
+                        !document.is_archived,
+                    ).length === 0 && (
+                      <button
+                        className="text-button danger-action"
+                        onClick={() =>
+                          setPendingKnowledgeDelete(selectedKnowledge)
+                        }
+                      >
+                        删除知识库
+                      </button>
+                    )}
                 </div>
               </div>
-              <form className="knowledge-edit-form" onSubmit={(event) => void updateKnowledge(event)}><label>知识库名称<input name="name" defaultValue={selectedKnowledge.name} required /></label><label>用途说明<input name="description" defaultValue={selectedKnowledge.description} /></label><button className="secondary-button">保存信息</button></form>
+              <form
+                className="knowledge-edit-form"
+                onSubmit={(event) => void updateKnowledge(event)}
+              >
+                <label>
+                  知识库名称
+                  <input
+                    name="name"
+                    defaultValue={selectedKnowledge.name}
+                    required
+                  />
+                </label>
+                <label>
+                  用途说明
+                  <input
+                    name="description"
+                    defaultValue={selectedKnowledge.description}
+                  />
+                </label>
+                <button className="secondary-button">保存信息</button>
+              </form>
               <form
                 className="knowledge-search"
                 onSubmit={(event) => void searchKnowledge(event)}
@@ -1914,113 +2997,464 @@ export function LegacyConsole({ initialNav = "运营总览" }: { initialNav?: st
                   检索结果会显示文档、片段、相似度和引用位置。
                 </p>
               )}
-              {false && <div className="knowledge-task-list">
-                {documents
-                  .filter(
-                    (document) =>
-                      document.knowledge_base_id === selectedKnowledge?.id,
-                  )
-                  .map((document) => (
-                    <div className="knowledge-task-row" key={document.id}>
-                      <span>{document.filename}</span>
-                      <span className={`status-dot-label ${document.status}`}>
-                        {document.is_archived ? "archived" : document.status}
-                      </span>
-                      <span className="document-meta">{document.category || "other"}{document.embedding_model ? ` · ${document.embedding_model} · ${document.embedding_dimension || "?"}d` : " · 未向量化"}</span>
-                      {document.error_message && <small className="export-error">{document.error_message}</small>}
-                      {document.status === "completed" && <button className="text-button" onClick={() => void openDocumentSource(document)}>查看原文</button>}
-                      {document.ingestion_task_id &&
-                        document.status === "failed" && (
+              {false && (
+                <div className="knowledge-task-list">
+                  {documents
+                    .filter(
+                      (document) =>
+                        document.knowledge_base_id === selectedKnowledge?.id,
+                    )
+                    .map((document) => (
+                      <div className="knowledge-task-row" key={document.id}>
+                        <span>{document.filename}</span>
+                        <span className={`status-dot-label ${document.status}`}>
+                          {document.is_archived ? "archived" : document.status}
+                        </span>
+                        <span className="document-meta">
+                          {document.category || "other"}
+                          {document.embedding_model
+                            ? ` · ${document.embedding_model} · ${document.embedding_dimension || "?"}d`
+                            : " · 未向量化"}
+                        </span>
+                        {document.error_message && (
+                          <small className="export-error">
+                            {document.error_message}
+                          </small>
+                        )}
+                        {document.status === "completed" && (
                           <button
                             className="text-button"
-                            onClick={() =>
-                              void retryIngestion(document.ingestion_task_id!)
-                            }
+                            onClick={() => void openDocumentSource(document)}
                           >
-                            重试摄取
+                            查看原文
                           </button>
                         )}
-                      {document.ingestion_task_id && ["queued", "processing"].includes(document.status) && <button className="text-button" onClick={() => void cancelIngestion(document.ingestion_task_id!)}>取消摄取</button>}
-                      {organization && ["org_admin", "platform_admin"].includes(organization.role) && <>
-                        <button className="text-button" onClick={() => void toggleDocumentArchive(document)}>{document.is_archived ? "恢复" : "归档"}</button>
-                        {!["queued", "processing"].includes(document.status) && <button className="text-button" onClick={() => void deleteDocument(document)}>删除</button>}
-                      </>}
-                    </div>
-                  ))}
-              </div>}
+                        {document.ingestion_task_id &&
+                          document.status === "failed" && (
+                            <button
+                              className="text-button"
+                              onClick={() =>
+                                void retryIngestion(document.ingestion_task_id!)
+                              }
+                            >
+                              重试摄取
+                            </button>
+                          )}
+                        {document.ingestion_task_id &&
+                          ["queued", "processing"].includes(
+                            document.status,
+                          ) && (
+                            <button
+                              className="text-button"
+                              onClick={() =>
+                                void cancelIngestion(
+                                  document.ingestion_task_id!,
+                                )
+                              }
+                            >
+                              取消摄取
+                            </button>
+                          )}
+                        {organization &&
+                          ["org_admin", "platform_admin"].includes(
+                            organization.role,
+                          ) && (
+                            <>
+                              <button
+                                className="text-button"
+                                onClick={() =>
+                                  void toggleDocumentArchive(document)
+                                }
+                              >
+                                {document.is_archived ? "恢复" : "归档"}
+                              </button>
+                              {!["queued", "processing"].includes(
+                                document.status,
+                              ) && (
+                                <button
+                                  className="text-button"
+                                  onClick={() => void deleteDocument(document)}
+                                >
+                                  删除
+                                </button>
+                              )}
+                            </>
+                          )}
+                      </div>
+                    ))}
+                </div>
+              )}
               <DocumentTaskList
                 documents={documents}
                 knowledgeBaseId={selectedKnowledge?.id || ""}
                 organizationRole={organization?.role}
-                onSource={(document) => { const full = documents.find((item) => item.id === document.id); if (full) void openDocumentSource(full); }}
+                onSource={(document) => {
+                  const full = documents.find(
+                    (item) => item.id === document.id,
+                  );
+                  if (full) void openDocumentSource(full);
+                }}
                 onRetry={(taskId) => void retryIngestion(taskId)}
                 onCancel={(taskId) => void cancelIngestion(taskId)}
-                onArchive={(document) => { const full = documents.find((item) => item.id === document.id); if (full) void toggleDocumentArchive(full); }}
-                onDelete={(document) => { const full = documents.find((item) => item.id === document.id); if (full) void deleteDocument(full); }}
-                onReplace={(document, file) => { const full = documents.find((item) => item.id === document.id); return full ? replaceDocument(full, file) : Promise.reject(new Error("文档不存在")); }}
-                onMetadata={(document, metadata) => { const full = documents.find((item) => item.id === document.id); return full ? updateDocumentMetadata(full, metadata) : Promise.reject(new Error("文档不存在")); }}
+                onArchive={(document) => {
+                  const full = documents.find(
+                    (item) => item.id === document.id,
+                  );
+                  if (full) void toggleDocumentArchive(full);
+                }}
+                onDelete={(document) => {
+                  const full = documents.find(
+                    (item) => item.id === document.id,
+                  );
+                  if (full) void deleteDocument(full);
+                }}
+                onReplace={(document, file) => {
+                  const full = documents.find(
+                    (item) => item.id === document.id,
+                  );
+                  return full
+                    ? replaceDocument(full, file)
+                    : Promise.reject(new Error("文档不存在"));
+                }}
+                onMetadata={(document, metadata) => {
+                  const full = documents.find(
+                    (item) => item.id === document.id,
+                  );
+                  return full
+                    ? updateDocumentMetadata(full, metadata)
+                    : Promise.reject(new Error("文档不存在"));
+                }}
               />
-              {documentSource && <section className="detail-panel document-source-panel"><div className="panel-heading"><div><p className="section-kicker">DOCUMENT / SOURCE</p><h3>{documentSource.filename} · v{documentSource.version}</h3><p>{documentSource.category || "other"} · {documentSource.chunks.length} 个分块</p></div><button className="text-button" onClick={() => setDocumentSource(null)}>关闭</button></div><div className="citation-list">{documentSource.chunks.map((chunk) => <article className="citation-item" key={chunk.id}><strong>#{chunk.ordinal + 1}</strong><p>{chunk.text}</p><small>{chunk.location ? JSON.stringify(chunk.location) : "未提供位置"}</small></article>)}</div></section>}
+              {documentSource && (
+                <section className="detail-panel document-source-panel">
+                  <div className="panel-heading">
+                    <div>
+                      <p className="section-kicker">DOCUMENT / SOURCE</p>
+                      <h3>
+                        {documentSource.filename} · v{documentSource.version}
+                      </h3>
+                      <p>
+                        {documentSource.category || "other"} ·{" "}
+                        {documentSource.chunks.length} 个分块
+                      </p>
+                    </div>
+                    <button
+                      className="text-button"
+                      onClick={() => setDocumentSource(null)}
+                    >
+                      关闭
+                    </button>
+                  </div>
+                  <div className="citation-list">
+                    {documentSource.chunks.map((chunk) => (
+                      <article className="citation-item" key={chunk.id}>
+                        <strong>#{chunk.ordinal + 1}</strong>
+                        <p>{chunk.text}</p>
+                        <small>
+                          {chunk.location
+                            ? JSON.stringify(chunk.location)
+                            : "未提供位置"}
+                        </small>
+                      </article>
+                    ))}
+                  </div>
+                </section>
+              )}
             </section>
           )}
         </DataView>
       );
-    if (nav === "报告中心") return <ReportsPage reports={reports} selectedReport={selectedReport} exports={reportExports} sources={sources} knowledgeBases={knowledge} filters={reportFilter} setFilters={setReportFilter} onOpen={(id) => void openReport(id)} onClose={() => setSelectedReport(null)} onDownload={(id) => void downloadReport(id)} onPreview={(id) => void previewReport(id)} onRetryExport={(reportId, exportId) => void retryReportExport(reportId, exportId)} />;
-    if (nav === "组织与审计") return <OrganizationAuditPage members={members} invitations={invitations} auditEvents={auditEvents} organization={organization} auditFilter={auditFilter} auditRunId={auditRunId} setAuditFilter={setAuditFilter} setAuditRunId={setAuditRunId} onInvite={inviteMember} onRoleChange={updateMemberRole} onToggle={toggleMember} onResend={resendInvitation} onRevoke={revokeInvitation} selectedAudit={selectedAudit} setSelectedAudit={setSelectedAudit} invitationLink={invitationLink} onDismissInvitationLink={() => setInvitationLink(null)} />;
-    if (nav === "分析会话") return <AnalysisSessionPage conversationId={analysisConversationId} messages={analysisMessages} onClearContext={() => setAnalysisMessages([])} onNewConversation={startNewAnalysisConversation} question={question} setQuestion={setQuestion} events={events} result={analysisResult} busy={busy} onSubmit={analyze} onDownloadReport={downloadReport} sources={sources} knowledgeBases={knowledge} sourceId={analysisSourceId} knowledgeBaseId={analysisKnowledgeBaseId} setSourceId={setAnalysisSourceId} setKnowledgeBaseId={setAnalysisKnowledgeBaseId} runs={analyses} page={analysisPage} pageSize={analysisPageSize} hasMore={analysisHasMore} setPage={setAnalysisPage} setPageSize={setAnalysisPageSize} onOpenRun={(id) => void openAnalysis(id)} selectedRun={selectedAnalysis} steps={analysisSteps} onCloseRun={() => setSelectedAnalysis(null)} onCancelRun={(id) => void cancelAnalysis(id)} onRetryRun={(id) => void retryAnalysis(id)} />;
-    return <OperationsOverviewPage dashboard={dashboard} dimensions={dashboardDimensions} filters={dashboardFilters} refreshing={refreshingDashboard} config={dashboardConfig} canConfigure={organization ? ["org_admin", "platform_admin"].includes(organization.role) : false} onChangeFilters={setDashboardFilters} onRefresh={() => void refreshDashboard()} onSaveConfig={(seconds) => void saveDashboardConfig(seconds)} onOpenAnalysis={(nextQuestion) => { if (nextQuestion) setQuestion(nextQuestion); selectNav("分析会话"); }} chartRef={chartRef} factoryChartRef={factoryChartRef} supplierChartRef={supplierChartRef} question={question} setQuestion={setQuestion} events={events} result={analysisResult} busy={busy} onSubmit={analyze} onDownloadReport={downloadReport} sources={sources} knowledgeBases={knowledge} sourceId={analysisSourceId} knowledgeBaseId={analysisKnowledgeBaseId} setSourceId={setAnalysisSourceId} setKnowledgeBaseId={setAnalysisKnowledgeBaseId} />;
+    if (nav === "报告中心")
+      return (
+        <ReportsPage
+          reports={reports}
+          selectedReport={selectedReport}
+          exports={reportExports}
+          sources={sources}
+          knowledgeBases={knowledge}
+          filters={reportFilter}
+          setFilters={setReportFilter}
+          onOpen={(id) => void openReport(id)}
+          onClose={() => setSelectedReport(null)}
+          onDownload={(id) => void downloadReport(id)}
+          onPreview={(id) => void previewReport(id)}
+          onRetryExport={(reportId, exportId) =>
+            void retryReportExport(reportId, exportId)
+          }
+        />
+      );
+    if (nav === "组织与审计")
+      return (
+        <OrganizationAuditPage
+          members={members}
+          invitations={invitations}
+          auditEvents={auditEvents}
+          organization={organization}
+          auditFilter={auditFilter}
+          auditRunId={auditRunId}
+          setAuditFilter={setAuditFilter}
+          setAuditRunId={setAuditRunId}
+          onInvite={inviteMember}
+          onRoleChange={updateMemberRole}
+          onToggle={toggleMember}
+          onResend={resendInvitation}
+          onRevoke={revokeInvitation}
+          selectedAudit={selectedAudit}
+          setSelectedAudit={setSelectedAudit}
+          invitationLink={invitationLink}
+          onDismissInvitationLink={() => setInvitationLink(null)}
+        />
+      );
+    if (nav === "分析会话")
+      return (
+        <AnalysisSessionPage
+          conversationId={analysisConversationId}
+          messages={analysisMessages}
+          onClearContext={() => setAnalysisMessages([])}
+          onNewConversation={startNewAnalysisConversation}
+          question={question}
+          setQuestion={setQuestion}
+          events={events}
+          result={analysisResult}
+          busy={busy}
+          onSubmit={analyze}
+          onDownloadReport={downloadReport}
+          sources={sources}
+          knowledgeBases={knowledge}
+          sourceId={analysisSourceId}
+          knowledgeBaseId={analysisKnowledgeBaseId}
+          setSourceId={setAnalysisSourceId}
+          setKnowledgeBaseId={setAnalysisKnowledgeBaseId}
+          runs={analyses}
+          page={analysisPage}
+          pageSize={analysisPageSize}
+          hasMore={analysisHasMore}
+          setPage={setAnalysisPage}
+          setPageSize={setAnalysisPageSize}
+          onOpenRun={(id) => void openAnalysis(id)}
+          selectedRun={selectedAnalysis}
+          steps={analysisSteps}
+          onCloseRun={() => setSelectedAnalysis(null)}
+          onCancelRun={(id) => void cancelAnalysis(id)}
+          onRetryRun={(id) => void retryAnalysis(id)}
+        />
+      );
+    return (
+      <OperationsOverviewPage
+        dashboard={dashboard}
+        dimensions={dashboardDimensions}
+        filters={dashboardFilters}
+        refreshing={refreshingDashboard}
+        config={dashboardConfig}
+        canConfigure={
+          organization
+            ? ["org_admin", "platform_admin"].includes(organization.role)
+            : false
+        }
+        onChangeFilters={(nextFilters) => {
+          setDashboardFilters(nextFilters);
+          setRefreshingDashboard(true);
+          void load(nextFilters).finally(() => setRefreshingDashboard(false));
+        }}
+        onRefresh={() => void refreshDashboard()}
+        onSaveConfig={(seconds) => void saveDashboardConfig(seconds)}
+        onOpenAnalysis={(nextQuestion) => {
+          if (nextQuestion) setQuestion(nextQuestion);
+          selectNav("分析会话");
+        }}
+        onStartRetailAnalysis={() => {
+          const retailSource = sources.find((item) => item.name === "UCI 在线零售真实数据");
+          const retailKnowledgeBase = knowledge.find((item) => item.name === "在线零售业务口径库");
+          if (retailSource) setAnalysisSourceId(retailSource.id);
+          if (retailKnowledgeBase) setAnalysisKnowledgeBaseId(retailKnowledgeBase.id);
+          setQuestion("在 2011年11月9日至2011年12月9日 期间，交易金额最高的10个国家分别有哪些？请按交易金额降序列出订单数、交易金额与退货数量，并给出市场优先级建议。");
+          selectNav("分析会话");
+        }}
+        chartRef={chartRef}
+        factoryChartRef={factoryChartRef}
+        supplierChartRef={supplierChartRef}
+        question={question}
+        setQuestion={setQuestion}
+        events={events}
+        result={analysisResult}
+        busy={busy}
+        onSubmit={analyze}
+        onDownloadReport={downloadReport}
+        sources={sources}
+        knowledgeBases={knowledge}
+        sourceId={analysisSourceId}
+        knowledgeBaseId={analysisKnowledgeBaseId}
+        setSourceId={setAnalysisSourceId}
+        setKnowledgeBaseId={setAnalysisKnowledgeBaseId}
+      />
+    );
   }
-  return <AppShell nav={nav} items={visibleNavItems} organizationName={organization?.name} systemStatus={systemStatus} busy={busy} onNavigate={selectNav} onRefresh={() => void load()} onLogout={() => void logout()} topbarActions={<div className="profile-wrap" ref={profileMenuRef}>
-              <button
-                className="avatar avatar-button"
-                onClick={() => setProfileOpen((open) => !open)}
-                aria-expanded={profileOpen}
-                aria-label="打开账户菜单"
-              >
-                管
-              </button>
-              {profileOpen && (
-                <div className="profile-menu">
-                  <strong>{loginEmail || "当前账户"}</strong>
-                  <span>{organization?.name || "当前组织"} · {organization?.role || "—"}</span>
-                  {organizations.length > 1 && (
-                    <div className="organization-menu">
-                      {organizations.map((item) => (
-                        <button key={item.id} disabled={item.id === organization?.id || busy} onClick={() => void switchOrganization(item.id)}>
-                          {item.name} · {item.role}{item.id === organization?.id ? "（当前）" : ""}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  {canManageOrganization && <button
-                    onClick={() => {
-                      setProfileOpen(false);
-                      selectNav("项目管理");
-                    }}
-                  >项目设置</button>}
-                  <button onClick={() => void logout()}>退出工作区</button>
+  return (
+    <AppShell
+      nav={nav}
+      items={visibleNavItems}
+      organizationName={organization?.name}
+      systemStatus={systemStatus}
+      busy={busy}
+      onNavigate={selectNav}
+      onRefresh={() => void load()}
+      onLogout={() => void logout()}
+      topbarActions={
+        <div className="profile-wrap" ref={profileMenuRef}>
+          <button
+            className="avatar avatar-button"
+            onClick={() => setProfileOpen((open) => !open)}
+            aria-expanded={profileOpen}
+            aria-label="打开账户菜单"
+          >
+            管
+          </button>
+          {profileOpen && (
+            <div className="profile-menu">
+              <strong>{loginEmail || "当前账户"}</strong>
+              <span>
+                {organization?.name || "当前组织"} · {organization?.role || "—"}
+              </span>
+              {organizations.length > 1 && (
+                <div className="organization-menu">
+                  {organizations.map((item) => (
+                    <button
+                      key={item.id}
+                      disabled={item.id === organization?.id || busy}
+                      onClick={() => void switchOrganization(item.id)}
+                    >
+                      {item.name} · {item.role}
+                      {item.id === organization?.id ? "（当前）" : ""}
+                    </button>
+                  ))}
                 </div>
               )}
-            </div>}>
-        {notice && (
-          <div className="notice" role="status">
-            {notice}
-          </div>
-        )}
-        {accessError && <section className="access-error-panel" role="alert"><strong>{accessError === "forbidden" ? "无权限" : accessError === "not-found" ? "资源不存在" : "登录已过期"}</strong><p>{accessError === "forbidden" ? "当前角色不能执行此操作，请联系组织管理员。" : accessError === "not-found" ? "资源可能已删除、归档或属于其他组织。" : "请重新登录后继续。"}</p>{accessError === "expired" && <button className="primary-button" onClick={() => { setToken(""); setRefresh(""); localStorage.removeItem("supplymind_token"); localStorage.removeItem("supplymind_refresh"); }}>返回登录</button>}</section>}
-        {page()}
-        {pendingKnowledgeDelete && (
-          <div className="modal-backdrop" role="presentation" onClick={() => setPendingKnowledgeDelete(null)}>
-            <section className="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="knowledge-delete-title" onClick={(event) => event.stopPropagation()}>
-              <span className="section-kicker">KNOWLEDGE BASE</span>
-              <h3 id="knowledge-delete-title">删除这个空白知识库？</h3>
-              <p>“{pendingKnowledgeDelete.name}”没有活动文档。确认后将立即从当前列表移除；已有文档的知识库只能归档，不能删除。</p>
-              <div className="confirm-actions">
-                <button className="secondary-button" onClick={() => setPendingKnowledgeDelete(null)}>取消</button>
-                <button className="primary-button danger-button" onClick={() => void deleteKnowledge()}>确认删除</button>
-              </div>
-            </section>
-          </div>
-        )}
-    </AppShell>;
+              {canManageOrganization && (
+                <button
+                  onClick={() => {
+                    setProfileOpen(false);
+                    selectNav("项目管理");
+                  }}
+                >
+                  项目设置
+                </button>
+              )}
+              <button onClick={() => void logout()}>退出工作区</button>
+            </div>
+          )}
+        </div>
+      }
+    >
+      {notice && (
+        <div className="notice" role="status">
+          {notice}
+        </div>
+      )}
+      {accessError && (
+        <section className="access-error-panel" role="alert">
+          <strong>
+            {accessError === "forbidden"
+              ? "无权限"
+              : accessError === "not-found"
+                ? "资源不存在"
+                : "登录已过期"}
+          </strong>
+          <p>
+            {accessError === "forbidden"
+              ? "当前角色不能执行此操作，请联系组织管理员。"
+              : accessError === "not-found"
+                ? "资源可能已删除、归档或属于其他组织。"
+                : "请重新登录后继续。"}
+          </p>
+          {accessError === "expired" && (
+            <button
+              className="primary-button"
+              onClick={() => {
+                setToken("");
+                setRefresh("");
+                localStorage.removeItem("supplymind_token");
+                localStorage.removeItem("supplymind_refresh");
+              }}
+            >
+              返回登录
+            </button>
+          )}
+        </section>
+      )}
+      {page()}
+      {pendingKnowledgeArchive && (
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onClick={() => setPendingKnowledgeArchive(null)}
+        >
+          <section
+            className="confirm-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="knowledge-archive-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h3 id="knowledge-archive-title">归档这个知识库？</h3>
+            <p>
+              “{pendingKnowledgeArchive.name}
+              ”归档后不能用于新的分析，已有文档与审计记录会保留，且可随时恢复。
+            </p>
+            <div className="confirm-actions">
+              <button
+                className="secondary-button"
+                onClick={() => setPendingKnowledgeArchive(null)}
+              >
+                取消
+              </button>
+              <button
+                className="primary-button"
+                onClick={() =>
+                  void toggleKnowledgeArchive(pendingKnowledgeArchive)
+                }
+              >
+                确认归档
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+      {pendingKnowledgeDelete && (
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onClick={() => setPendingKnowledgeDelete(null)}
+        >
+          <section
+            className="confirm-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="knowledge-delete-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <span className="section-kicker">KNOWLEDGE BASE</span>
+            <h3 id="knowledge-delete-title">永久删除这个空知识库？</h3>
+            <p>
+              “{pendingKnowledgeDelete.name}
+              ”已归档且不包含任何文档。确认后将永久删除，无法恢复。
+            </p>
+            <div className="confirm-actions">
+              <button
+                className="secondary-button"
+                onClick={() => setPendingKnowledgeDelete(null)}
+              >
+                取消
+              </button>
+              <button
+                className="primary-button danger-button"
+                onClick={() => void deleteKnowledge()}
+              >
+                确认永久删除
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+    </AppShell>
+  );
 }
