@@ -25,9 +25,16 @@ from app.services.ingestion import process_ingestion
 from app.services.reports import render_pdf
 from app.services.storage import configured as storage_configured
 from app.services.storage import put_file
+from app.services.task_watchdog import RetryRequest, reconcile_stalled_tasks
 
 celery_app = Celery("supplymind", broker=get_settings().redis_url, backend=get_settings().redis_url)
 celery_app.conf.task_routes = {"supplymind.*": {"queue": "analysis"}}
+celery_app.conf.beat_schedule = {
+    "reconcile-stalled-tasks": {
+        "task": "supplymind.tasks.reconcile_stalled",
+        "schedule": 60.0,
+    }
+}
 
 
 @celery_app.task(
@@ -199,3 +206,15 @@ def export_report_pdf(self, export_id: str) -> str:
 
     asyncio.run(run())
     return export_id
+
+
+@celery_app.task(name="supplymind.tasks.reconcile_stalled")
+def reconcile_stalled() -> int:
+    async def run() -> list[RetryRequest]:
+        async with SessionLocal() as session:
+            return await reconcile_stalled_tasks(session)
+
+    retries = asyncio.run(run())
+    for retry in retries:
+        celery_app.send_task(retry.task_name, args=retry.args)
+    return len(retries)

@@ -286,6 +286,7 @@ async def seed_demo_data() -> None:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    settings.validate_trial_runtime()
     # PostgreSQL schema is owned by Alembic; automatic metadata creation is only
     # retained for isolated SQLite development/test databases.
     if settings.database_url.startswith("sqlite") and (

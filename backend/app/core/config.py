@@ -2,6 +2,9 @@ from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+DEVELOPMENT_JWT_SECRET = "development-only-change-me-please-change-me"
+DEVELOPMENT_CREDENTIAL_KEY = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_prefix="SUPPLYMIND_", extra="ignore")
@@ -10,8 +13,8 @@ class Settings(BaseSettings):
     auto_create_schema: bool = False
     database_url: str = "sqlite+aiosqlite:///./supplymind.db"
     redis_url: str = "redis://localhost:6379/0"
-    jwt_secret: str = "development-only-change-me-please-change-me"
-    credential_key: str = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
+    jwt_secret: str = DEVELOPMENT_JWT_SECRET
+    credential_key: str = DEVELOPMENT_CREDENTIAL_KEY
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
     sql_timeout_seconds: int = 15
     sql_max_rows: int = 500
@@ -41,6 +44,8 @@ class Settings(BaseSettings):
     s3_bucket: str = "supplymind"
     s3_access_key: str | None = None
     s3_secret_key: str | None = None
+    task_queued_timeout_seconds: int = 600
+    task_running_timeout_seconds: int = 1800
 
     @property
     def cors_origin_list(self) -> list[str]:
@@ -57,6 +62,20 @@ class Settings(BaseSettings):
     @property
     def is_development(self) -> bool:
         return self.env.lower() in {"development", "dev", "test"}
+
+    def validate_trial_runtime(self) -> None:
+        """Reject a trial deployment that accidentally uses development secrets."""
+        if self.env.lower() != "trial":
+            return
+        invalid = []
+        if len(self.jwt_secret) < 32 or self.jwt_secret == DEVELOPMENT_JWT_SECRET:
+            invalid.append("SUPPLYMIND_JWT_SECRET")
+        if self.credential_key == DEVELOPMENT_CREDENTIAL_KEY:
+            invalid.append("SUPPLYMIND_CREDENTIAL_KEY")
+        if not self.s3_endpoint or not self.s3_access_key or not self.s3_secret_key:
+            invalid.append("SUPPLYMIND_S3_ENDPOINT/S3_ACCESS_KEY/S3_SECRET_KEY")
+        if invalid:
+            raise ValueError("trial runtime configuration is unsafe: " + ", ".join(invalid))
 
 
 @lru_cache

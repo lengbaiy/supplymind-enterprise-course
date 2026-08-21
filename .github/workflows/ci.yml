@@ -17,7 +17,9 @@ jobs:
           python-version: "3.12"
       - run: pip install ".[dev]"
       - run: pytest -q
+      - run: ruff check app scripts tests
       - run: python -m compileall -q app
+      - run: test "$(alembic heads | wc -l)" -eq 1
 
   frontend:
     runs-on: ubuntu-latest
@@ -58,6 +60,13 @@ jobs:
       - uses: azure/setup-helm@v4
       - run: helm lint infra/helm/supplymind
       - run: helm template supplymind infra/helm/supplymind > /tmp/supplymind-manifest.yaml
+
+  compose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose config --quiet
+      - run: SUPPLYMIND_TRIAL_ENV_FILE=.env.trial.example docker compose --env-file .env.trial.example -f docker-compose.yml -f docker-compose.trial.yml config --quiet
 
   security:
     runs-on: ubuntu-latest
