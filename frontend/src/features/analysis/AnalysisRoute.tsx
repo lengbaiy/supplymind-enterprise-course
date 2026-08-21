@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import * as Dialog from "@radix-ui/react-dialog";
 import { AppShell } from "../../components/AppShell";
 import { API_BASE, apiRequest } from "../../services/api";
@@ -18,6 +18,7 @@ import { freshSnapshot, mergeAnalysisEvent } from "./analysis-stream";
 
 export function AnalysisRoute() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [token, setToken] = useState(
     () => localStorage.getItem("supplymind_token") || "",
   );
@@ -25,7 +26,7 @@ export function AnalysisRoute() {
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBase[]>([]);
   const [sourceId, setSourceId] = useState("");
   const [knowledgeBaseId, setKnowledgeBaseId] = useState("");
-  const [question, setQuestion] = useState("");
+  const [question, setQuestion] = useState(() => searchParams.get("question") || "");
   const [stream, setStream] = useState(freshSnapshot);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -48,6 +49,10 @@ export function AnalysisRoute() {
       ),
     [token],
   );
+  useEffect(() => {
+    const preset = searchParams.get("question");
+    if (preset) setQuestion(preset);
+  }, [searchParams]);
   const refreshRuns = useCallback(
     () => api<AnalysisRun[]>("/analyses?page=1&page_size=10").then(setRuns),
     [api],

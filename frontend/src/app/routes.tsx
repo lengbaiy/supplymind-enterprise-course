@@ -11,6 +11,9 @@ const AnalysisRoute = lazy(() =>
 const DataSourcesRoute = lazy(() =>
   import("../features/datasources/DataSourcesRoute").then((module) => ({ default: module.DataSourcesRoute })),
 );
+const OperationsOverviewRoute = lazy(() =>
+  import("../features/dashboards/OperationsOverviewRoute").then((module) => ({ default: module.OperationsOverviewRoute })),
+);
 
 export const NAV_PATHS: Record<NavItem, string> = {
   "运营总览": "/overview",
@@ -39,8 +42,9 @@ export function AppRoutes() {
       <Route path="/" element={<Navigate to={NAV_PATHS["运营总览"]} replace />} />
       <Route path="/analysis" element={<Suspense fallback={<RouteLoading />}><AnalysisRoute /></Suspense>} />
       <Route path="/data-sources" element={<Suspense fallback={<RouteLoading />}><DataSourcesRoute /></Suspense>} />
+      <Route path="/overview" element={<Suspense fallback={<RouteLoading />}><OperationsOverviewRoute /></Suspense>} />
       {NAV_ITEMS.map((item) => {
-        if (item === "分析会话" || item === "数据源") return null;
+        if (item === "运营总览" || item === "分析会话" || item === "数据源") return null;
         const Page = legacyRoute(item);
         return <Route key={item} path={NAV_PATHS[item]} element={<Page />} />;
       })}
