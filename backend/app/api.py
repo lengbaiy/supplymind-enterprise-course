@@ -3322,6 +3322,58 @@ async def list_data_source_sync_tasks(
     return list(result)
 
 
+@router.post(
+    "/data-sources/{source_id}/sync-tasks/{task_id}/cancel",
+    response_model=DataSourceSyncTaskView,
+)
+async def cancel_data_source_sync_task(
+    source_id: str,
+    task_id: str,
+    principal: Principal = Depends(require_role("org_admin", "platform_admin")),
+    session: AsyncSession = Depends(get_session),
+) -> DataSourceSyncTask:
+    """Cancel a queued schema scan without exposing another tenant's task."""
+    try:
+        source = await get_tenant_source(session, source_id, principal.tenant_id)
+    except DataSourceError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    task = await session.scalar(
+        select(DataSourceSyncTask).where(
+            DataSourceSyncTask.id == task_id,
+            DataSourceSyncTask.data_source_id == source.id,
+            DataSourceSyncTask.tenant_id == principal.tenant_id,
+        )
+    )
+    if not task:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Schema sync task not found")
+    if task.status not in {"queued", "running"}:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前同步任务不可取消")
+    if task.celery_task_id:
+        try:
+            from scripts.worker import celery_app
+
+            celery_app.control.revoke(task.celery_task_id, terminate=False)
+        except Exception:
+            # The persisted cancellation remains authoritative if Redis is unavailable.
+            pass
+    task.status = "cancelled"
+    task.error_message = "Schema 同步已由用户取消"
+    task.finished_at = datetime.now(UTC)
+    if source.status == "syncing":
+        source.status = "active"
+    await audit(
+        session,
+        principal.tenant_id,
+        principal.user_id,
+        "datasource.schema_sync_cancelled",
+        "data_source_sync_task",
+        task.id,
+        {"data_source_id": source.id},
+    )
+    await session.commit()
+    return task
+
+
 @router.get("/data-sources/{source_id}/schema/tables/{table_name}")
 async def get_schema_table(
     source_id: str,
@@ -3998,6 +4050,33 @@ async def system_status(
         )
         or 0
     )
+    failed_sync = int(
+        await session.scalar(
+            select(func.count(DataSourceSyncTask.id)).where(
+                DataSourceSyncTask.tenant_id == principal.tenant_id,
+                DataSourceSyncTask.status == "failed",
+            )
+        )
+        or 0
+    )
+    failed_exports = int(
+        await session.scalar(
+            select(func.count(ReportExport.id)).where(
+                ReportExport.tenant_id == principal.tenant_id,
+                ReportExport.status == "failed",
+            )
+        )
+        or 0
+    )
+    failed_analyses = int(
+        await session.scalar(
+            select(func.count(AnalysisRun.id)).where(
+                AnalysisRun.tenant_id == principal.tenant_id,
+                AnalysisRun.status == "failed",
+            )
+        )
+        or 0
+    )
     recent_errors = list(
         await session.scalars(
             select(AuditEvent)
@@ -4009,7 +4088,8 @@ async def system_status(
             .limit(10)
         )
     )
-    dependencies["worker"]["failed_tasks"] = str(failed_ingestion + failed_refresh)
+    failed_total = failed_ingestion + failed_refresh + failed_sync + failed_exports + failed_analyses
+    dependencies["worker"]["failed_tasks"] = str(failed_total)
     dependencies["worker"]["dead_letter_tasks"] = str(dead_letter)
     dependencies["worker"]["recent_errors"] = [
         {
@@ -4052,7 +4132,15 @@ async def system_status(
         "status": "degraded" if degraded else "ready",
         "dependencies": dependencies,
         "data_sources": source_status,
-        "task_summary": {"failed": failed_ingestion + failed_refresh, "dead_letter": dead_letter},
+        "task_summary": {
+            "failed": failed_total,
+            "dead_letter": dead_letter,
+            "ingestion_failed": failed_ingestion,
+            "schema_sync_failed": failed_sync,
+            "dashboard_refresh_failed": failed_refresh,
+            "pdf_export_failed": failed_exports,
+            "analysis_failed": failed_analyses,
+        },
     }
 
 

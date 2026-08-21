@@ -209,3 +209,60 @@ def test_resending_an_invitation_invalidates_its_previous_token(monkeypatch, tmp
         assert accepted.status_code == 200
         analyst_headers = {"Authorization": f"Bearer {accepted.json()['access_token']}"}
         assert client.get("/api/v1/members", headers=analyst_headers).status_code == 403
+
+
+def test_member_admin_guards_and_cross_organization_resources_are_hidden(
+    monkeypatch, tmp_path: Path
+) -> None:
+    """Management endpoints must distinguish forbidden roles from hidden tenants."""
+    monkeypatch.setenv("SUPPLYMIND_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path / 'isolation.db'}")
+    monkeypatch.setenv("SUPPLYMIND_JWT_SECRET", "test-secret-that-is-long-enough-for-tests")
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
+    from app.main import app
+
+    with TestClient(app) as client:
+        def login(email: str, slug: str) -> dict[str, str]:
+            response = client.post(
+                "/api/v1/auth/login",
+                json={
+                    "email": email,
+                    "password": "ChangeMe123!",
+                    "organization_slug": slug,
+                },
+            )
+            assert response.status_code == 200
+            return {"Authorization": f"Bearer {response.json()['access_token']}"}
+
+        admin = login("admin@demo.local", "demo-factory")
+        south_admin = login("south-admin@demo.local", "demo-south")
+        own_member = next(item for item in client.get("/api/v1/members", headers=admin).json() if item["email"] == "admin@demo.local")
+
+        # The final active org admin cannot demote or deactivate themselves.
+        assert client.patch(
+            f"/api/v1/members/{own_member['user_id']}", headers=admin, json={"role": "analyst"}
+        ).status_code == 400
+        assert client.patch(
+            f"/api/v1/members/{own_member['user_id']}/status", headers=admin, json={"is_active": False}
+        ).status_code == 400
+
+        south_member = next(
+            item
+            for item in client.get("/api/v1/members", headers=south_admin).json()
+            if item["email"] == "south-admin@demo.local"
+        )
+        south_invitation = client.post(
+            "/api/v1/members/invitations",
+            headers=south_admin,
+            json={"email": "south-only@example.com", "role": "viewer"},
+        )
+        assert south_invitation.status_code == 201
+
+        # A valid admin in another organization gets 404, never an ownership hint.
+        assert client.patch(
+            f"/api/v1/members/{south_member['user_id']}", headers=admin, json={"role": "viewer"}
+        ).status_code == 404
+        assert client.post(
+            f"/api/v1/members/invitations/{south_invitation.json()['id']}/revoke", headers=admin
+        ).status_code == 404
