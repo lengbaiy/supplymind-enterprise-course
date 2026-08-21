@@ -75,6 +75,33 @@ test("viewer is redirected away from a restricted deep link", async ({ page }) =
   await expect(page.getByRole("navigation", { name: "主导航" }).getByRole("button", { name: "组织与审计" })).toHaveCount(0);
 });
 
+test("analyst can open analysis resources but cannot enter organization administration", async ({ page }) => {
+  await page.goto("/analysis");
+  await page.getByLabel("登录邮箱").fill("analyst@demo.local");
+  await page.getByLabel("登录密码").fill("ChangeMe123!");
+  await page.getByLabel("组织标识").fill("demo-factory");
+  await page.getByRole("button", { name: "登录工作区" }).click();
+  await expect(page.getByRole("heading", { name: "运营总览" })).toBeVisible({ timeout: 15_000 });
+  const navigation = page.getByRole("navigation", { name: "主导航" });
+  await navigation.getByRole("button", { name: "组织与审计" }).click();
+  await expect(page.getByRole("heading", { name: "无权限访问组织与审计" })).toBeVisible();
+  await navigation.getByRole("button", { name: /分析会话/ }).click();
+  await expect(page.getByLabel("数据源")).toBeEnabled({ timeout: 15_000 });
+  await expect(page.getByRole("button", { name: "开始分析" })).toBeDisabled();
+});
+
+test("second organization only sees its own resources in the browser", async ({ page }) => {
+  await page.goto("/data-sources");
+  await page.getByLabel("登录邮箱").fill("south-admin@demo.local");
+  await page.getByLabel("登录密码").fill("ChangeMe123!");
+  await page.getByLabel("组织标识").fill("demo-south");
+  await page.getByRole("button", { name: "登录工作区" }).click();
+  await expect(page.getByRole("heading", { name: "运营总览" })).toBeVisible({ timeout: 15_000 });
+  await page.getByRole("navigation", { name: "主导航" }).getByRole("button", { name: /数据源/ }).click();
+  await expect(page.getByText("南方制造事业部 · POSTGRESQL 演示库")).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText("示范制造集团 · POSTGRESQL 演示库")).toHaveCount(0);
+});
+
 test("administrator can inspect the real operational resource paths", async ({ page }) => {
   await page.goto("/overview");
   await page.getByLabel("登录邮箱").fill("admin@demo.local");
