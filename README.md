@@ -19,9 +19,21 @@ Open `http://localhost:5173`. The seeded organization is `demo-factory`; sign in
 - `infra/`: Docker initialization files, Prometheus profile and Helm chart.
 - `docs/`: course package and operational guidance.
 
-See `docs/ARCHITECTURE.md` for directory ownership and the incremental module extraction policy.
+See `docs/ARCHITECTURE.md` for directory ownership and the module boundary policy.
 
-For continuation in a new Codex window, read `docs/CODEX_HANDOFF.md` first. It records the current commit, completed capabilities, verification commands, remaining backlog, and non-negotiable project rules.
+## Course delivery
+
+- Student lab path: `docs/COURSE_LABS.md`
+- Instructor guide: `docs/INSTRUCTOR_GUIDE.md`
+- Assessment rubric: `docs/ASSESSMENT_RUBRIC.md`
+- Enterprise drills: `docs/ENTERPRISE_DRILLS.md`
+
+Useful classroom scripts:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/reset-demo.ps1 -Build
+powershell -ExecutionPolicy Bypass -File scripts/acceptance-report.ps1 -RunTests
+```
 
 ## Security boundary
 

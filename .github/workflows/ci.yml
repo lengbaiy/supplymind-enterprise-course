@@ -47,7 +47,7 @@ jobs:
       - run: docker compose up -d postgres redis minio demo-postgres retail-postgres demo-mysql
       - run: docker compose run --rm api alembic upgrade head
       - run: docker compose up -d --build api worker frontend
-      - run: until curl --fail --silent http://127.0.0.1:8000/api/v1/ready; do sleep 2; done
+      - run: until curl --fail --silent http://127.0.0.1:8000/api/v1/health/ready; do sleep 2; done
       - uses: actions/setup-node@v4
         with:
           node-version: "22"

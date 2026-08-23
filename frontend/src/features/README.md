@@ -5,5 +5,6 @@ reports, dashboards, audit, and system. Each domain owns its views and local sta
 while shared API/SSE calls remain in `src/services`.
 
 Each business domain also owns `pages`, `components`, `api`, `hooks`, `types`, and
-tests. New functionality must not be added to `main.tsx`; that file is the temporary
-legacy compatibility surface while the existing console is migrated route by route.
+tests. New functionality should stay inside the owning domain folder, with shared
+transport code in `src/services` and shared UI in `src/components` or
+`src/design-system`.

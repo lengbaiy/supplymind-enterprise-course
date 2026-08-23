@@ -8,4 +8,4 @@
 6. React 数据分析控制台、ECharts 图表和供应链大屏。
 7. Docker Compose、Helm、CI/CD 与企业交付答辩。
 
-每章包含起始代码、完成代码、练习、验收条件和常见故障排查。详见项目 README 的运行说明。
+每章包含练习、验收条件和常见故障排查。学员按 [COURSE_LABS.md](COURSE_LABS.md) 完成实验，讲师按 [INSTRUCTOR_GUIDE.md](INSTRUCTOR_GUIDE.md) 控制节奏，评分使用 [ASSESSMENT_RUBRIC.md](ASSESSMENT_RUBRIC.md)。企业交付和故障恢复训练见 [ENTERPRISE_DRILLS.md](ENTERPRISE_DRILLS.md)。

@@ -13,10 +13,9 @@
 ## Backend layering
 
 `app/core` provides configuration and cross-cutting infrastructure. `app/modules`
-contains bounded domains. The current top-level API/model/service files are a
-compatibility layer and will be extracted incrementally. Routers call domain
-services; domain services call repositories and declared ports; background tasks
-persist state before external work.
+contains bounded domains. `app/api.py` is the versioned API entry point, while
+domain services call repositories and declared ports. Background tasks persist
+state before external work.
 
 ## Runtime boundaries
 
@@ -31,7 +30,8 @@ the application container.
 - Test: isolated SQLite/PostgreSQL test database, mocked model providers, no external customer data.
 - Production: explicit Alembic migration, external PostgreSQL/Redis/S3/OIDC, no demo seed, broker-backed tasks.
 
-## Compatibility rule
+## API stability rule
 
-Every extraction is made behind the existing `/api/v1` contract. A migration is
-complete only after old API tests and new module contract tests pass together.
+All changes must preserve the existing `/api/v1` contract unless the course
+exercise explicitly asks for a versioned API change. A module change is complete
+only after API tests and domain tests pass together.

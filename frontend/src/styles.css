@@ -53,7 +53,7 @@
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 .route-loading{display:grid;min-height:100dvh;place-items:center;background:#f5f8f6;color:#527164;font-size:14px}
 
-/* Long generated answers and live metric labels must never widen the workbench. */
+/* Long streamed answers and live metric labels must never widen the workbench. */
 .retail-overview,.retail-overview-heading>div,.retail-metrics>div,.retail-markets,.analysis-evidence,.analysis-evidence .result-heading>div,.insight-block{min-width:0}
 .retail-metrics span,.retail-markets small,.analysis-summary,.analysis-result-meta,.insight-block p{overflow-wrap:anywhere}
 .analysis-evidence .result-heading{align-items:flex-start}

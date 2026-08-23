@@ -32,6 +32,13 @@
 - 作业 3（25%）：实现一个 MCP 工具的输入/输出 Schema，并记录审计事件。
 - 项目答辩（30%）：完成核心 E2E，说明失败、超时、越权和回滚处理。
 
+## 课程材料入口
+
+- 学员实验路线：[COURSE_LABS.md](COURSE_LABS.md)
+- 讲师手册：[INSTRUCTOR_GUIDE.md](INSTRUCTOR_GUIDE.md)
+- 评分标准：[ASSESSMENT_RUBRIC.md](ASSESSMENT_RUBRIC.md)
+- 企业级故障演练：[ENTERPRISE_DRILLS.md](ENTERPRISE_DRILLS.md)
+
 ## 学员复现命令
 
 ```powershell
@@ -42,3 +49,10 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml exec -T api ruff 
 ```
 
 前端地址为 `http://localhost:5173`，API 文档为 `http://localhost:8000/docs`，Prometheus 指标为 `http://localhost:8000/api/v1/metrics`。
+
+## 课堂辅助脚本
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/reset-demo.ps1 -Build
+powershell -ExecutionPolicy Bypass -File scripts/acceptance-report.ps1 -RunTests
+```

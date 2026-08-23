@@ -1,9 +1,8 @@
 # Modular monolith boundaries
 
 `app/modules` is the domain boundary for the SupplyMind backend. Each module owns
-its schemas, services, API router, background tasks, and migration changes as the
-implementation is extracted from the current compatibility layer (`app/api.py`,
-`app/services`, and `app/models.py`).
+its schemas, services, API router, background tasks, and migration changes.
+Shared infrastructure stays in `app/core`, `app/db`, and `app/services`.
 
 Rules for new work:
 
@@ -13,6 +12,5 @@ Rules for new work:
 4. API handlers stay thin: validate input, resolve principal, call a domain service, and map the result.
 5. Background tasks receive an idempotency key and persist state transitions before doing external work.
 
-The first extraction targets dashboards and audit because they have bounded contracts;
-identity and datasource extraction follows after the current compatibility endpoints
-are covered by contract tests.
+When a module exposes an API, keep the endpoint contract stable and cover both
+the domain service and the API behavior with tests.
