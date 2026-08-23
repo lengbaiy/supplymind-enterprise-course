@@ -18,6 +18,8 @@ docker compose ps
 Invoke-RestMethod http://localhost:8000/api/v1/health/ready
 ```
 
+真实 AI 分析和知识库检索需要在 `.env` 中填写 Chat/Embedding 密钥。配置方式见 [CONFIGURATION.md](CONFIGURATION.md)。
+
 登录地址：`http://localhost:5173`
 
 演示账号：

@@ -11,6 +11,8 @@ docker compose up --build
 
 Open `http://localhost:5173`. The seeded organization is `demo-factory`; sign in with `admin@demo.local` and password `ChangeMe123!`.
 
+For real AI analysis and knowledge-base retrieval, fill your own Chat and Embedding keys in `.env` before running the full scenario. See `docs/CONFIGURATION.md` for every required field and safe key-generation commands.
+
 ## Architecture
 
 - `backend/`: FastAPI API, tenant isolation, SQL guard, analysis workflow and audit trail.
@@ -27,6 +29,7 @@ See `docs/ARCHITECTURE.md` for directory ownership and the module boundary polic
 - Instructor guide: `docs/INSTRUCTOR_GUIDE.md`
 - Assessment rubric: `docs/ASSESSMENT_RUBRIC.md`
 - Enterprise drills: `docs/ENTERPRISE_DRILLS.md`
+- Configuration and keys: `docs/CONFIGURATION.md`
 
 Useful classroom scripts:
 

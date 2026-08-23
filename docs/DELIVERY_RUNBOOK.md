@@ -2,7 +2,7 @@
 
 ## 空环境启动
 
-1. 复制 `.env.example` 为 `.env`，设置 `SUPPLYMIND_JWT_SECRET`、`SUPPLYMIND_CREDENTIAL_KEY`，以及真实 Chat/Embedding/OIDC/S3 配置。
+1. 复制 `.env.example` 为 `.env`，按 [CONFIGURATION.md](CONFIGURATION.md) 设置 `SUPPLYMIND_JWT_SECRET`、`SUPPLYMIND_CREDENTIAL_KEY`，以及真实 Chat/Embedding/OIDC/S3 配置。
 2. 执行 `docker compose up -d --build`。
 3. 检查 `docker compose ps`，API、Worker、frontend、postgres、redis、minio 和演示数据源必须健康。
 4. 执行 `docker compose exec -T api alembic upgrade head`。
