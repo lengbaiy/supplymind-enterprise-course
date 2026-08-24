@@ -36,6 +36,14 @@ from app.services.reports import render_markdown
 
 
 def normalize_value(value):
+    if isinstance(value, str):
+        # Some legacy MySQL connections returned UTF-8 bytes decoded as Latin-1.
+        # Repair only strings that round-trip safely, leaving ordinary Unicode intact.
+        try:
+            repaired = value.encode("latin-1").decode("utf-8")
+        except (UnicodeEncodeError, UnicodeDecodeError):
+            return value
+        return repaired if any(marker in value for marker in ("Ã", "Â", "ä¸", "å·", "æ")) else value
     if isinstance(value, Decimal):
         return float(value)
     if isinstance(value, (date, datetime)):

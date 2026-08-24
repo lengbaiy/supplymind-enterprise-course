@@ -1,30 +1,73 @@
 from app.models import AnalysisRun
 
 
+def _repair_mojibake(value: str) -> str:
+    """Repair the common UTF-8-as-Latin-1 legacy representation for exports."""
+    if not any(marker in value for marker in ("Ã", "Â", "ä¸", "å·", "æ")):
+        return value
+    try:
+        return value.encode("latin-1").decode("utf-8")
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        return value
+
+
 def render_pdf(markdown: str, destination: str) -> None:
     """Render a readable, dependency-light PDF from report markdown."""
     from xml.sax.saxutils import escape
 
+    from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import getSampleStyleSheet
     from reportlab.lib.units import mm
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont
-    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
     # The TrueType WenQuanYi CJK face is embedded in the PDF. Browser PDF
     # viewers cannot reliably render unembedded CID fallback fonts.
     font_name = "SupplyMindCJK"
     font_path = "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc"
     pdfmetrics.registerFont(TTFont(font_name, font_path, subfontIndex=0))
+    markdown = _repair_mojibake(markdown)
     styles = getSampleStyleSheet()
     for style in styles.byName.values():
         style.fontName = font_name
     story = []
-    for raw_line in markdown.splitlines():
+    lines = markdown.splitlines()
+    index = 0
+    while index < len(lines):
+        raw_line = lines[index]
         line = raw_line.strip()
         if not line:
             story.append(Spacer(1, 4 * mm))
+            index += 1
+            continue
+        if line.startswith("|") and index + 1 < len(lines) and lines[index + 1].strip().startswith("|"):
+            rows: list[list[str]] = []
+            header = [cell.strip() for cell in line.strip("|").split("|")]
+            index += 2  # Skip the Markdown separator row.
+            rows.append(header)
+            while index < len(lines) and lines[index].strip().startswith("|"):
+                rows.append([cell.strip() for cell in lines[index].strip().strip("|").split("|")])
+                index += 1
+            width = 174 * mm / max(len(header), 1)
+            table = Table(
+                [[Paragraph(escape(cell), styles["BodyText"]) for cell in row] for row in rows],
+                colWidths=[width] * len(header),
+                repeatRows=1,
+                hAlign="LEFT",
+            )
+            table.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#e8f3ed")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#153d30")),
+                ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#b7d4c5")),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 5),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+                ("TOPPADDING", (0, 0), (-1, -1), 5),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ]))
+            story.extend([table, Spacer(1, 4 * mm)])
             continue
         if line.startswith("# "):
             story.append(Paragraph(escape(line[2:]), styles["Title"]))
@@ -34,6 +77,7 @@ def render_pdf(markdown: str, destination: str) -> None:
             story.append(Paragraph("&#8226; " + escape(line[2:]), styles["BodyText"]))
         else:
             story.append(Paragraph(escape(line.replace("**", "")), styles["BodyText"]))
+        index += 1
     SimpleDocTemplate(
         destination,
         pagesize=A4,

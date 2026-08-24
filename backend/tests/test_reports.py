@@ -1,5 +1,5 @@
 from app.models import AnalysisRun, ReportExport
-from app.services.reports import render_markdown, render_pdf
+from app.services.reports import _repair_mojibake, render_markdown, render_pdf
 from app.services.storage import export_asset_available
 
 
@@ -26,7 +26,24 @@ def test_render_markdown_contains_sql_rows_and_citations() -> None:
 
 def test_render_pdf_creates_pdf(tmp_path) -> None:
     destination = tmp_path / "report.pdf"
-    render_pdf("# 月度报告\n\n## 结论\n\n完成", str(destination))
+    render_pdf(
+        "# 月度报告\n\n## 数据结果\n\n| 工厂 | 达成率 |\n| --- | --- |\n| 上海工厂 | 91.4% |",
+        str(destination),
+    )
+    assert destination.read_bytes().startswith(b"%PDF")
+
+
+def test_report_export_repairs_legacy_chinese_mojibake(tmp_path) -> None:
+    legacy_markdown = (
+        "# 生产报告\n\n"
+        "| factory | achievement_rate | at_risk_materials |\n"
+        "| --- | --- | --- |\n"
+        "| æé½å·¥å | 89.55 | 2 |"
+    )
+    destination = tmp_path / "legacy-report.pdf"
+
+    assert "成都工厂" in _repair_mojibake(legacy_markdown)
+    render_pdf(legacy_markdown, str(destination))
     assert destination.read_bytes().startswith(b"%PDF")
 
 

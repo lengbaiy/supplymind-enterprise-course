@@ -52,8 +52,9 @@ export function ReportsRoute() {
   };
   const preview = (id: string) => { const previewWindow = window.open("", "_blank"); if (!previewWindow) { setNotice("浏览器阻止了预览窗口，请允许弹窗后重试。"); return; } previewWindow.document.title = "SupplyMind PDF 预览"; previewWindow.document.body.textContent = "正在准备 PDF，请勿关闭此窗口..."; void download(id, previewWindow); };
   const retryExport = (reportId: string, exportId: string) => { void api<ReportExport>(`/reports/${reportId}/exports/${exportId}/retry`, { method: "POST" }).then((updated) => { setExports((current) => [updated, ...current.filter((item) => item.id !== updated.id)]); setNotice("PDF 导出已重新排队"); }).catch((error) => setNotice(error instanceof Error ? error.message : "PDF 重试失败")); };
+  const regenerateExport = (reportId: string) => { void api<ReportExport>(`/reports/${reportId}/exports/pdf?force=true`, { method: "POST" }).then((updated) => { setExports((current) => [updated, ...current]); setNotice("正在按最新渲染规则重新生成 PDF..."); }).catch((error) => setNotice(error instanceof Error ? error.message : "PDF 重新生成失败")); };
   return <AppShell nav="报告中心" items={NAV_ITEMS} organizationName={organization?.name} onNavigate={(item) => navigate(paths[item])} onRefresh={() => void load(filters)} onLogout={() => { localStorage.clear(); navigate("/"); }}>
     {notice && <p className="form-notice" role="status">{notice}</p>}
-    <ReportsPage reports={reports} selectedReport={selectedReport} exports={exports} sources={sources} knowledgeBases={knowledgeBases} filters={filters} setFilters={setFilters} onOpen={(id) => void open(id)} onClose={() => setSelectedReport(null)} onDownload={(id) => void download(id)} onPreview={preview} onRetryExport={retryExport} />
+    <ReportsPage reports={reports} selectedReport={selectedReport} exports={exports} sources={sources} knowledgeBases={knowledgeBases} filters={filters} setFilters={setFilters} onOpen={(id) => void open(id)} onClose={() => setSelectedReport(null)} onDownload={(id) => void download(id)} onPreview={preview} onRetryExport={retryExport} onRegenerateExport={regenerateExport} />
   </AppShell>;
 }

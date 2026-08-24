@@ -3331,6 +3331,7 @@ async def get_report(
 )
 async def export_report_pdf(
     report_id: str,
+    force: bool = Query(default=False),
     principal: Principal = Depends(
         require_role("viewer", "analyst", "org_admin", "platform_admin")
     ),
@@ -3347,7 +3348,7 @@ async def export_report_pdf(
         )
         .order_by(ReportExport.created_at.desc())
     )
-    if existing:
+    if existing and not force:
         if existing.status != "completed" or export_asset_available(
             existing.storage_backend, existing.file_path, existing.object_key
         ):

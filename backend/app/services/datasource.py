@@ -44,7 +44,7 @@ def source_url(source: DataSource) -> str:
     if source.engine == "postgresql":
         return f"postgresql+asyncpg://{source.username}:{password}@{source.host}:{source.port}/{source.database_name}"
     if source.engine == "mysql":
-        return f"mysql+aiomysql://{source.username}:{password}@{source.host}:{source.port}/{source.database_name}"
+        return f"mysql+aiomysql://{source.username}:{password}@{source.host}:{source.port}/{source.database_name}?charset=utf8mb4"
     raise DataSourceError("Unsupported database engine")
 
 
