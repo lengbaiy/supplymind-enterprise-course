@@ -13,7 +13,7 @@ SupplyMind 是一个面向制造业供应链场景的多租户、只读 Agent �
 - 长短期记忆：PostgreSQL Checkpointer 支持会话恢复；用户级长期记忆带类别白名单、置信度、版本、过期和自助控制。
 - MCP 与 A2A：独立标准 MCP Server、Streamable HTTP/受控 stdio Client、工具 RBAC、审批；只读 A2A Agent Card、任务与流式结果接口。
 - AI 分析：数据源选择、知识库选择、Router/Handoff/Subagent/RAG Trace、SSE 流式状态和断线续传、SQL Guard、结果表、图表和洞察。
-- 报告中心：Markdown 报告、PDF 导出任务、MinIO/S3 对象存储、下载权限校验。
+- 报告中心：Markdown 报告、中文字体嵌入的 PDF、原生表格导出、MinIO/S3 对象存储、下载权限校验。
 - 供应链大屏：采购交付、生产达成、库存健康、质量合格率、订单履约等指标。
 - 可靠性：Celery Worker、事务 Outbox、持久化分析事件、心跳、`Last-Event-ID`、取消和重试。
 - 可观测与评测：GenAI OTLP Span、Prometheus 指标、Phoenix/Grafana Profile、评测 Worker 和 CI 质量门禁。
@@ -207,6 +207,15 @@ powershell -ExecutionPolicy Bypass -File scripts/reset-demo.ps1 -Build
 powershell -ExecutionPolicy Bypass -File scripts/acceptance-report.ps1 -RunTests
 ```
 
+## PDF 报告
+
+报告中心中的“下载 PDF”会在没有可用导出文件时创建异步导出任务，并在 Worker 完成后下载。
+PDF 会嵌入中文字体，Markdown 中的标准表格会以 PDF 表格形式呈现，支持常见浏览器和系统 PDF 阅读器。
+
+历史报告不会覆盖已有导出文件。若旧文件出现中文乱码、文本表格或需要套用最新渲染规则，打开报告详情，在“导出历史”点击“重新生成 PDF”，等待状态变为 `completed` 后重新下载。
+
+MySQL 数据源应使用 UTF-8/`utf8mb4` 字符集；平台的 MySQL 连接会显式请求 `utf8mb4`。导入的源数据本身如已经损坏编码，需先在源数据库修复后再分析。
+
 ## 验收检查
 
 后端测试：
@@ -327,6 +336,20 @@ powershell -ExecutionPolicy Bypass -File scripts/reset-demo.ps1 -WithVolumes -Bu
 ```
 
 这会删除本地演示数据，只能用于开发环境。
+
+### 5. PDF 中文乱码或表格仍显示为文本
+
+先打开对应报告详情，点击“重新生成 PDF”，因为此前已完成的导出文件不会自动改写。然后等待导出历史的最新任务状态为 `completed`，再下载该报告。
+
+若重新生成失败，检查 Worker 与对象存储：
+
+```powershell
+docker compose ps
+docker compose logs --tail=120 worker
+docker compose logs --tail=120 api
+```
+
+若仅某个数据源的中文字段异常，确认其数据库、表和连接均采用 UTF-8/`utf8mb4`；这类源数据编码问题不能由 PDF 阅读器修复。
 
 ## License and notices
 

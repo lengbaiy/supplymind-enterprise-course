@@ -76,6 +76,14 @@ SUPPLYMIND_EMBEDDING_DIMENSION=1024
 
 `SUPPLYMIND_EMBEDDING_DIMENSION` 必须和模型实际输出维度一致。维度不一致会导致向量写入或检索失败。
 
+## 中文数据与 PDF 导出
+
+PDF 由后端 Worker 异步生成，并嵌入中文字体。无需为 PDF 单独配置字体或密钥。标准 Markdown 表格会渲染为 PDF 表格，而不是原始的 `|` 分隔文本。
+
+平台的 MySQL 连接固定请求 `utf8mb4`。对于新建或接入的 MySQL 数据源，应确认数据库、表和连接用户均使用 `utf8mb4`；否则源数据可能在进入分析前已经出现乱码。
+
+已经完成的 PDF 导出是不可变对象，不会在应用升级后自动改写。需要按当前渲染规则重建时，在报告中心打开详情并点击“重新生成 PDF”。此操作会创建一条新的导出记录，不会删除原始文件。若任务失败，可在导出历史中重试，并通过 `docker compose logs -f worker` 查看失败原因。
+
 ## 企业 Agent 配置
 
 默认 Compose 会启动 API、Worker、Celery Beat 和独立 MCP Server。MCP 内置工具地址为

@@ -69,7 +69,7 @@ Every response includes `X-Trace-ID`. Pass the same value in `X-Trace-ID` when c
 | POST | `/analyses/{id}/cancel` | Cancel a queued/running run. |
 | GET | `/reports` | Filter by title, status, creator, time and analysis run ID. |
 | GET | `/reports/{id}` | Read Markdown, citations and run metadata. |
-| POST | `/reports/{id}/exports/pdf` | Queue a PDF export. |
+| POST | `/reports/{id}/exports/pdf` | Queue a PDF export. Add `?force=true` to create a new export using the latest renderer even when a completed export already exists. |
 | GET | `/reports/{id}/exports/pdf` | Read queued/running/completed/failed export status. |
 | POST | `/reports/{id}/exports/{export_id}/retry` | Retry a failed export. |
 | GET | `/reports/{id}/exports/pdf/download` | Download the completed local or MinIO/S3 object. |
