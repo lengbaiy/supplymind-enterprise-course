@@ -154,7 +154,12 @@ from app.schemas import (
     UserMemoryView,
 )
 from app.services.audit import audit
-from app.services.events import append_event, create_outbox_event, stream_events
+from app.services.events import (
+    append_event,
+    create_background_task_event,
+    create_outbox_event,
+    stream_events,
+)
 from app.services.ingestion import process_ingestion
 from app.services.knowledge import KnowledgeError, extract_text, sha256
 from app.services.llm import ModelConfigurationError, ModelResponseError
@@ -2684,20 +2689,15 @@ async def upload_document(
             document.id,
             {"filename": document.filename},
         )
-        await session.commit()
-        from scripts.worker import celery_app
-
-        try:
-            dispatched = celery_app.send_task("supplymind.documents.ingest", args=[task.id])
-        except Exception as exc:
-            task.status = "failed"
-            task.error_message = "任务投递失败"
-            await session.commit()
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="文档摄取任务暂时不可用"
-            ) from exc
-        task.celery_task_id = dispatched.id
-        await session.commit()
+        session.add(
+            create_background_task_event(
+                tenant_id=principal.tenant_id,
+                aggregate_type="ingestion_task",
+                aggregate_id=task.id,
+                event_type="document.ingestion_requested",
+                payload={"task_id": task.id},
+            )
+        )
     else:
         try:
             await process_ingestion(session, task, document)
@@ -2867,10 +2867,15 @@ async def rollback_document_version(
     session.add(task)
     await session.flush()
     if get_settings().ingestion_mode == "broker":
-        from scripts.worker import celery_app
-
-        dispatched = celery_app.send_task("supplymind.documents.ingest", args=[task.id])
-        task.celery_task_id = dispatched.id
+        session.add(
+            create_background_task_event(
+                tenant_id=principal.tenant_id,
+                aggregate_type="ingestion_task",
+                aggregate_id=task.id,
+                event_type="document.ingestion_requested",
+                payload={"task_id": task.id, "reason": "version_rollback"},
+            )
+        )
     else:
         try:
             await process_ingestion(session, task, document)
@@ -3057,10 +3062,15 @@ async def retry_ingestion(
             {"task_id": task.id},
         )
         await session.commit()
-        from scripts.worker import celery_app
-
-        dispatched = celery_app.send_task("supplymind.documents.ingest", args=[task.id])
-        task.celery_task_id = dispatched.id
+        session.add(
+            create_background_task_event(
+                tenant_id=principal.tenant_id,
+                aggregate_type="ingestion_task",
+                aggregate_id=task.id,
+                event_type="document.ingestion_requested",
+                payload={"task_id": task.id, "reason": "manual_retry"},
+            )
+        )
     else:
         try:
             await process_ingestion(session, task, document)
@@ -3364,10 +3374,15 @@ async def export_report_pdf(
     session.add(export)
     await session.flush()
     if get_settings().ingestion_mode == "broker":
-        from scripts.worker import celery_app
-
-        task = celery_app.send_task("supplymind.reports.export_pdf", args=[export.id])
-        export.celery_task_id = task.id
+        session.add(
+            create_background_task_event(
+                tenant_id=principal.tenant_id,
+                aggregate_type="report_export",
+                aggregate_id=export.id,
+                event_type="report.pdf_export_requested",
+                payload={"export_id": export.id},
+            )
+        )
     else:
         export.attempts = 1
         export.started_at = datetime.now(UTC)
@@ -3475,10 +3490,15 @@ async def retry_report_export(
     export.file_path = None
     export.object_key = None
     if get_settings().ingestion_mode == "broker":
-        from scripts.worker import celery_app
-
-        task = celery_app.send_task("supplymind.reports.export_pdf", args=[export.id])
-        export.celery_task_id = task.id
+        session.add(
+            create_background_task_event(
+                tenant_id=principal.tenant_id,
+                aggregate_type="report_export",
+                aggregate_id=export.id,
+                event_type="report.pdf_export_requested",
+                payload={"export_id": export.id, "reason": "manual_retry"},
+            )
+        )
     else:
         export.attempts += 1
         export.started_at = datetime.now(UTC)

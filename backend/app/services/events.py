@@ -115,10 +115,28 @@ async def stream_events(
 
 
 def create_outbox_event(run: AnalysisRun, event_type: str, payload: dict) -> OutboxEvent:
-    return OutboxEvent(
+    return create_background_task_event(
         tenant_id=run.tenant_id,
         aggregate_type="analysis_run",
         aggregate_id=run.id,
+        event_type=event_type,
+        payload=payload,
+    )
+
+
+def create_background_task_event(
+    *,
+    tenant_id: str,
+    aggregate_type: str,
+    aggregate_id: str,
+    event_type: str,
+    payload: dict,
+) -> OutboxEvent:
+    """Create work that is committed with its domain record before dispatch."""
+    return OutboxEvent(
+        tenant_id=tenant_id,
+        aggregate_type=aggregate_type,
+        aggregate_id=aggregate_id,
         event_type=event_type,
         payload=payload,
         available_at=datetime.now(UTC),

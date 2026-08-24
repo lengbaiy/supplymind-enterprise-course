@@ -1,6 +1,6 @@
 # Supply-chain demo seed contract
 
-The teaching demo database must expose these business areas:
+The demo database must expose these business areas:
 
 - suppliers and supplier delivery performance
 - purchase orders and purchase-order lines
@@ -19,8 +19,8 @@ platform database seed. The current platform demo seed remains in
 
 Equivalent starter scripts are available at `postgresql/001_supply_chain.sql`
 and `mysql/001_supply_chain.sql`. The PostgreSQL script contains the complete
-course schema; the MySQL script covers the core supplier, material, production,
-and inventory path and can be extended during the datasource lesson.
+demo schema; the MySQL script covers the core supplier, material, production,
+and inventory path and can be extended for additional datasource scenarios.
 
 ## Synthetic test fixtures
 
@@ -62,7 +62,7 @@ docker compose exec -T api python -m scripts.import_uci_secom
 The UCI Online Retail II importer downloads the official Excel archive and loads
 more than one million real, anonymized retail transaction rows into
 `retail_transactions`. It is a separate analysis table: retail customers,
-countries, and stock codes are not misrepresented as the teaching factory's
+countries, and stock codes are not misrepresented as the demo factory's
 suppliers, factories, or work orders. Re-running it is idempotent by source-row
 identifier.
 
