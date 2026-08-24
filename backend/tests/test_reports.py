@@ -44,3 +44,13 @@ def test_completed_export_requires_an_available_local_asset(tmp_path) -> None:
     artifact.write_bytes(b"%PDF")
     export.file_path = str(artifact)
     assert export_asset_available(export.storage_backend, export.file_path, export.object_key)
+
+
+def test_completed_export_requires_an_object_key_for_s3() -> None:
+    export = ReportExport(
+        tenant_id="tenant-1",
+        report_id="report-1",
+        created_by="user-1",
+        storage_backend="s3",
+    )
+    assert not export_asset_available(export.storage_backend, export.file_path, export.object_key)

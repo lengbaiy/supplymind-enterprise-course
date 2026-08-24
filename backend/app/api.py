@@ -3381,6 +3381,10 @@ async def export_report_pdf(
             export.storage_backend = "s3" if storage_configured() else "local"
             if export.storage_backend == "s3":
                 export.file_path = None
+            if not export_asset_available(
+                export.storage_backend, export.file_path, export.object_key
+            ):
+                raise RuntimeError("PDF export artifact could not be verified")
             export.status = "completed"
         except (OSError, RuntimeError, ValueError) as exc:
             export.status = "failed"
@@ -3424,11 +3428,14 @@ async def report_pdf_status(
 
             state = celery_app.AsyncResult(export.celery_task_id).state
             if state == "SUCCESS":
-                export.status = "completed"
+                # Celery acknowledges task execution, not artifact durability. The worker
+                # is the only component allowed to mark the verified export completed.
+                export.status = "failed"
+                export.error_message = "PDF export task finished without a verified artifact"
             elif state in {"FAILURE", "REVOKED"}:
                 export.status = "failed"
                 export.error_message = "PDF export task failed"
-            if export.status in {"completed", "failed"}:
+            if export.status == "failed":
                 export.updated_at = datetime.now(UTC)
                 await session.commit()
         except Exception:
@@ -3485,6 +3492,10 @@ async def retry_report_export(
             export.storage_backend = "s3" if storage_configured() else "local"
             if export.storage_backend == "s3":
                 export.file_path = None
+            if not export_asset_available(
+                export.storage_backend, export.file_path, export.object_key
+            ):
+                raise RuntimeError("PDF export artifact could not be verified")
             export.status = "completed"
         except (OSError, RuntimeError, ValueError) as exc:
             export.status = "failed"
@@ -3550,15 +3561,26 @@ async def download_report_pdf(
         )
         .order_by(ReportExport.created_at.desc())
     )
-    if (
-        not export
-        or (
-            export.storage_backend == "local"
-            and (not export.file_path or not Path(export.file_path).is_file())
-        )
-        or (export.storage_backend == "s3" and not export.object_key)
-    ):
+    if not export:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="PDF is not ready")
+    if not export_asset_available(export.storage_backend, export.file_path, export.object_key):
+        export.status = "failed"
+        export.error_message = "Export artifact is no longer available"
+        export.finished_at = datetime.now(UTC)
+        await audit(
+            session,
+            principal.tenant_id,
+            principal.user_id,
+            "report.download_failed",
+            "report",
+            report_id,
+            {"reason": "export artifact is missing", "export_id": export.id},
+        )
+        await session.commit()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="PDF export artifact is missing; retry the export",
+        )
     await audit(
         session,
         principal.tenant_id,

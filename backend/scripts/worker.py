@@ -26,7 +26,7 @@ from app.services.datasource import synchronize_schema
 from app.services.ingestion import process_ingestion
 from app.services.reports import render_pdf
 from app.services.storage import configured as storage_configured
-from app.services.storage import put_file
+from app.services.storage import export_asset_available, put_file
 from app.services.task_watchdog import RetryRequest, reconcile_stalled_tasks
 
 celery_app = Celery("supplymind", broker=get_settings().redis_url, backend=get_settings().redis_url)
@@ -302,6 +302,10 @@ def export_report_pdf(self, export_id: str) -> str:
                     export.storage_backend = "s3" if storage_configured() else "local"
                     export.file_path = str(path) if export.storage_backend == "local" else None
                     export.checksum_sha256 = sha256_digest(path.read_bytes()).hexdigest()
+                    if not export_asset_available(
+                        export.storage_backend, export.file_path, export.object_key
+                    ):
+                        raise RuntimeError("PDF export artifact could not be verified")
                     export.status = "completed"
                     export.error_message = None
                 except (OSError, RuntimeError, ValueError) as exc:
