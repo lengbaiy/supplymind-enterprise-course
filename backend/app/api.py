@@ -159,16 +159,10 @@ from app.services.ingestion import process_ingestion
 from app.services.knowledge import KnowledgeError, extract_text, sha256
 from app.services.llm import ModelConfigurationError, ModelResponseError
 from app.services.storage import configured as storage_configured
-from app.services.storage import get_file, object_exists, put_file
+from app.services.storage import export_asset_available, get_file, put_file
 
 router = APIRouter(prefix="/api/v1")
 a2a_router = APIRouter()
-
-
-def export_asset_available(export: ReportExport) -> bool:
-    if export.storage_backend == "s3":
-        return bool(export.object_key and object_exists(export.object_key))
-    return bool(export.file_path and Path(export.file_path).is_file())
 
 
 @router.get("/conversations")
@@ -3354,7 +3348,9 @@ async def export_report_pdf(
         .order_by(ReportExport.created_at.desc())
     )
     if existing:
-        if existing.status != "completed" or export_asset_available(existing):
+        if existing.status != "completed" or export_asset_available(
+            existing.storage_backend, existing.file_path, existing.object_key
+        ):
             return existing
         # A completed database row must not strand a report when its artifact
         # was removed by local cleanup or object-storage retention.

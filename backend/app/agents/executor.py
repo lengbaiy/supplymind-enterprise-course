@@ -9,8 +9,9 @@ from app.agents.graph import AgentServices, build_enterprise_graph
 from app.agents.runtime import RuntimeContainer
 from app.agents.state import SupplyMindState
 from app.core.config import get_settings
+from app.core.sql_guard import SQLGuardError, validate_read_only_sql
 from app.db import SessionLocal, set_tenant_context
-from app.mcp_runtime.client import MCPClientManager
+from app.mcp_runtime.client import MCPClientManager, MCPToolError
 from app.mcp_runtime.security import issue_tool_context
 from app.memory.service import MemoryPolicyError, MemoryService
 from app.models import (
@@ -42,6 +43,15 @@ def normalize_value(value):
     if isinstance(value, bytes):
         return value.decode("utf-8", errors="replace")
     return value
+
+
+def _root_error_message(exc: BaseException) -> str:
+    if isinstance(exc, BaseExceptionGroup):
+        for nested in exc.exceptions:
+            message = _root_error_message(nested)
+            if message:
+                return message
+    return str(exc)
 
 
 class EnterpriseAnalysisExecutor:
@@ -342,16 +352,48 @@ class EnterpriseAnalysisExecutor:
             "handoff",
             {"from": "data_analysis", "to": "sql_planner"},
         )
-        plan = await self.client.plan_sql(state["question"], schema_result.get("tables", []))
-        query_result = await self.mcp.call(
-            "sql.query",
-            {
-                "context_token": context_token,
-                "data_source_id": state["data_source_id"],
-                "sql": plan["sql"],
-            },
-            **connection,
-        )
+        schema = schema_result.get("tables", [])
+        allowed_tables = {
+            item.get("name", "") if isinstance(item, dict) else str(item) for item in schema
+        }
+        failures: list[str] = []
+        plan: dict = {}
+        query_result: dict | None = None
+        for attempt in range(1, 3):
+            plan = await self.client.plan_sql(
+                state["question"], schema, previous_error=failures[-1] if failures else None
+            )
+            try:
+                validate_read_only_sql(plan["sql"], allowed_tables, get_settings().sql_max_rows)
+                query_result = await self.mcp.call(
+                    "sql.query",
+                    {
+                        "context_token": context_token,
+                        "data_source_id": state["data_source_id"],
+                        "sql": plan["sql"],
+                    },
+                    **connection,
+                )
+                break
+            except (MCPToolError, SQLGuardError, RuntimeError, ValueError) as exc:
+                reason = str(exc)[:600]
+                failures.append(reason)
+                await self._emit(
+                    run_id,
+                    principal.tenant_id,
+                    "fallback",
+                    {
+                        "stage": "sql_planner",
+                        "attempt": attempt,
+                        "max_attempts": 2,
+                        "reason": reason,
+                    },
+                )
+        if query_result is None:
+            raise RuntimeError(
+                "SQL planning was rejected after 2 attempts: "
+                + (failures[-1] if failures else "unknown")
+            )
         rows = [
             {key: normalize_value(value) for key, value in row.items()}
             for row in query_result.get("rows", [])
@@ -535,11 +577,17 @@ class EnterpriseAnalysisExecutor:
             run.status = "failed"
             AGENT_RUNS.labels(run.route or "unknown", "failed").inc()
             run.finished_at = datetime.now(UTC)
-            run.error_message = str(exc)[:1000]
+            error_message = _root_error_message(exc)
+            run.error_message = error_message[:1000]
             await session.commit()
             await append_event(
                 session,
                 run,
                 "failed",
-                {"run_id": run.id, "message": "分析执行失败", "error_type": type(exc).__name__},
+                {
+                    "run_id": run.id,
+                    "message": "分析执行失败",
+                    "error_type": type(exc).__name__,
+                    "reason": error_message[:600],
+                },
             )

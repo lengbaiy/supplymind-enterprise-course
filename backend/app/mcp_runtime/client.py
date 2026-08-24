@@ -10,6 +10,10 @@ from app.core.config import get_settings
 from app.observability import MCP_TOOL_CALLS, genai_span
 
 
+class MCPToolError(RuntimeError):
+    """A tool error with the server-provided, auditable rejection reason."""
+
+
 def validate_mcp_endpoint(endpoint: str) -> str:
     parsed = urlparse(endpoint)
     if parsed.scheme not in {"http", "https"} or not parsed.hostname:
@@ -97,7 +101,13 @@ class MCPClientManager:
                 async with self.session(**connection) as session:
                     result = await session.call_tool(name, arguments=arguments)
                     if result.isError:
-                        raise RuntimeError(f"MCP tool failed: {name}")
+                        details = "; ".join(
+                            block.text
+                            for block in result.content
+                            if isinstance(getattr(block, "text", None), str)
+                        )
+                        message = f"MCP tool failed: {name}"
+                        raise MCPToolError(f"{message}: {details}" if details else message)
                     if result.structuredContent:
                         payload = dict(result.structuredContent)
                     else:

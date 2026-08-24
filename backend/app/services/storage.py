@@ -74,3 +74,11 @@ def object_exists(object_key: str) -> bool:
     except (BotoCoreError, ClientError):
         return False
     return True
+
+
+def export_asset_available(
+    storage_backend: str, file_path: str | None, object_key: str | None
+) -> bool:
+    if storage_backend == "s3":
+        return bool(object_key and object_exists(object_key))
+    return bool(file_path and Path(file_path).is_file())

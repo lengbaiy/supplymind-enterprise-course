@@ -1,6 +1,6 @@
-from app.api import export_asset_available
 from app.models import AnalysisRun, ReportExport
 from app.services.reports import render_markdown, render_pdf
+from app.services.storage import export_asset_available
 
 
 def test_render_markdown_contains_sql_rows_and_citations() -> None:
@@ -38,9 +38,9 @@ def test_completed_export_requires_an_available_local_asset(tmp_path) -> None:
         storage_backend="local",
         file_path=str(tmp_path / "missing.pdf"),
     )
-    assert not export_asset_available(export)
+    assert not export_asset_available(export.storage_backend, export.file_path, export.object_key)
 
     artifact = tmp_path / "ready.pdf"
     artifact.write_bytes(b"%PDF")
     export.file_path = str(artifact)
-    assert export_asset_available(export)
+    assert export_asset_available(export.storage_backend, export.file_path, export.object_key)

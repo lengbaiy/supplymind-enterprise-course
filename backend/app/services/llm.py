@@ -225,6 +225,7 @@ class OpenAICompatibleClient:
         question: str,
         schema: list[str] | list[dict],
         context: list[str] | None = None,
+        previous_error: str | None = None,
     ) -> dict:
         settings = get_settings()
         if not settings.chat_base_url or not settings.chat_model or not settings.chat_api_key:
@@ -248,7 +249,12 @@ class OpenAICompatibleClient:
             "Use the current question as the source of truth. Use history only to resolve references such as '它' or '继续看', "
             "and never repeat an old question as a new task. "
             f"Allowed tables and columns: {schema_text}. Never invent column names. "
-            f"Recent conversation:\n{context_text}\nCurrent user question: {question}"
+            + (
+                f"The previous plan was rejected: {previous_error}. Correct that exact issue and return a new plan. "
+                if previous_error
+                else ""
+            )
+            + f"Recent conversation:\n{context_text}\nCurrent user question: {question}"
         )
         formatted_prompt = prompt_template.format_messages(prompt=prompt)
         url = f"{settings.chat_base_url.rstrip('/')}/chat/completions"
