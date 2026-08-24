@@ -93,6 +93,7 @@ services:
       SUPPLYMIND_S3_BUCKET: supplymind
       SUPPLYMIND_S3_ACCESS_KEY: supplymind
       SUPPLYMIND_S3_SECRET_KEY: supplymind-local-change-me
+      SUPPLYMIND_MCP_INTERNAL_URL: http://mcp-server:8001/mcp
     ports: ["8000:8000"]
     volumes:
       - documents_data:/data/documents
@@ -124,10 +125,12 @@ services:
       SUPPLYMIND_S3_BUCKET: supplymind
       SUPPLYMIND_S3_ACCESS_KEY: supplymind
       SUPPLYMIND_S3_SECRET_KEY: supplymind-local-change-me
+      SUPPLYMIND_MCP_INTERNAL_URL: http://mcp-server:8001/mcp
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
       minio: { condition: service_healthy }
+      mcp-server: { condition: service_healthy }
     volumes:
       - documents_data:/data/documents
       - reports_data:/data/reports
@@ -137,6 +140,41 @@ services:
       interval: 20s
       timeout: 8s
       retries: 6
+  beat:
+    build: ./backend
+    command: celery -A scripts.worker.celery_app beat --loglevel=INFO
+    env_file: ${SUPPLYMIND_ENV_FILE:-.env}
+    environment:
+      SUPPLYMIND_DATABASE_URL: postgresql+psycopg://supplymind:supplymind@postgres:5432/supplymind
+      SUPPLYMIND_REDIS_URL: redis://redis:6379/0
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+  mcp-server:
+    build: ./backend
+    command: python -m scripts.mcp_server
+    env_file: ${SUPPLYMIND_ENV_FILE:-.env}
+    environment:
+      SUPPLYMIND_DATABASE_URL: postgresql+psycopg://supplymind:supplymind@postgres:5432/supplymind
+      SUPPLYMIND_REDIS_URL: redis://redis:6379/0
+      SUPPLYMIND_DOCUMENT_DIRECTORY: /data/documents
+      SUPPLYMIND_REPORT_DIRECTORY: /data/reports
+      SUPPLYMIND_S3_ENDPOINT: http://minio:9000
+      SUPPLYMIND_S3_BUCKET: supplymind
+      SUPPLYMIND_S3_ACCESS_KEY: supplymind
+      SUPPLYMIND_S3_SECRET_KEY: supplymind-local-change-me
+    ports: ["8001:8001"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    volumes:
+      - documents_data:/data/documents
+      - reports_data:/data/reports
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; s=socket.create_connection(('127.0.0.1',8001),2); s.close()"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
   frontend:
     build: ./frontend
     environment: { VITE_API_BASE_URL: http://localhost:8000/api/v1 }
@@ -152,6 +190,37 @@ services:
     profiles: [oidc]
     command: uvicorn scripts.oidc_mock:app --host 0.0.0.0 --port 8081
     ports: ["8081:8081"]
+  litellm:
+    image: ghcr.io/berriai/litellm:main-v1.74.9-stable
+    profiles: [enterprise-ai]
+    command: ["--config", "/app/config.yaml", "--port", "4000", "--num_workers", "2"]
+    environment:
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-sk-supplymind-local-change-me}
+      SUPPLYMIND_UPSTREAM_CHAT_BASE_URL: ${SUPPLYMIND_UPSTREAM_CHAT_BASE_URL:-https://api.openai.com/v1}
+      SUPPLYMIND_UPSTREAM_CHAT_MODEL: ${SUPPLYMIND_UPSTREAM_CHAT_MODEL:-gpt-4.1-mini}
+      SUPPLYMIND_UPSTREAM_CHAT_API_KEY: ${SUPPLYMIND_UPSTREAM_CHAT_API_KEY:-}
+      SUPPLYMIND_UPSTREAM_EMBEDDING_MODEL: ${SUPPLYMIND_UPSTREAM_EMBEDDING_MODEL:-text-embedding-3-large}
+    volumes: ["./infra/litellm-config.yaml:/app/config.yaml:ro"]
+    ports: ["4000:4000"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:4000/health/liveliness', timeout=3).read()"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.111.0
+    profiles: [observability]
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes: ["./infra/otel-collector.yaml:/etc/otelcol/config.yaml:ro"]
+    ports: ["4317:4317", "4318:4318", "8889:8889"]
+    depends_on: [phoenix]
+  phoenix:
+    image: arizephoenix/phoenix:version-11.13.2
+    profiles: [observability]
+    environment:
+      PHOENIX_WORKING_DIR: /data
+    volumes: [phoenix_data:/data]
+    ports: ["6006:6006"]
   prometheus:
     image: prom/prometheus:v2.54.1
     profiles: [observability]
@@ -176,3 +245,4 @@ volumes:
   demo_postgres_data:
   retail_postgres_data:
   demo_mysql_data:
+  phoenix_data:

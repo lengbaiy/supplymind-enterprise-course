@@ -7,7 +7,7 @@ import { API_BASE, apiRequest } from "../../services/api";
 import { DataSourceDetail } from "./DataSourceDetail";
 import { DataSourcesPage } from "./DataSourcesPage";
 
-const paths: Record<NavItem, string> = { "运营总览": "/overview", "项目管理": "/project", "企业管理": "/platform/organizations", "大屏配置": "/dashboard/configuration", "分析会话": "/analysis", "数据源": "/data-sources", "知识库": "/knowledge", "报告中心": "/reports", "组织与审计": "/audit", "系统状态": "/system-status" };
+const paths: Record<NavItem, string> = { "运营总览": "/overview", "项目管理": "/project", "企业管理": "/platform/organizations", "大屏配置": "/dashboard/configuration", "分析会话": "/analysis", "Agent 平台": "/agent-platform", "数据源": "/data-sources", "知识库": "/knowledge", "报告中心": "/reports", "组织与审计": "/audit", "系统状态": "/system-status" };
 type Schema = { tables: SchemaTable[]; table_count: number };
 type Task = { id: string; status: string; started_at?: string; finished_at?: string; error_message?: string; celery_task_id?: string };
 type QueryResult = { sql: string; tables: string[]; rows: Record<string, unknown>[]; row_count: number; max_rows: number; elapsed_ms: number; redacted: boolean };

@@ -17,6 +17,7 @@ jobs:
           python-version: "3.12"
       - run: pip install ".[dev]"
       - run: pytest -q
+      - run: python -m scripts.evaluation_gate
       - run: ruff check app scripts tests
       - run: python -m compileall -q app
       - run: test "$(alembic heads | wc -l)" -eq 1
@@ -110,3 +111,12 @@ jobs:
           image-ref: supplymind-api:ci
           severity: CRITICAL,HIGH
           ignore-unfixed: true
+      - uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: cyclonedx-json
+          output-file: supplymind-sbom.cdx.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: supplymind-sbom
+          path: supplymind-sbom.cdx.json

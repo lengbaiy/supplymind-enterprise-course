@@ -6,7 +6,7 @@ import { AppShell } from "../../components/AppShell";
 import { API_BASE, apiRequest } from "../../services/api";
 import { ProjectManagementPage } from "./ProjectManagementPage";
 
-const paths: Record<NavItem, string> = { "运营总览": "/overview", "项目管理": "/project", "企业管理": "/platform/organizations", "大屏配置": "/dashboard/configuration", "分析会话": "/analysis", "数据源": "/data-sources", "知识库": "/knowledge", "报告中心": "/reports", "组织与审计": "/audit", "系统状态": "/system-status" };
+const paths: Record<NavItem, string> = { "运营总览": "/overview", "项目管理": "/project", "企业管理": "/platform/organizations", "大屏配置": "/dashboard/configuration", "分析会话": "/analysis", "Agent 平台": "/agent-platform", "数据源": "/data-sources", "知识库": "/knowledge", "报告中心": "/reports", "组织与审计": "/audit", "系统状态": "/system-status" };
 type Quotas = { max_concurrent_analyses: number; daily_analysis_runs: number; max_document_size_mb: number; retention_days: number };
 const emptyQuotas: Quotas = { max_concurrent_analyses: 4, daily_analysis_runs: 100, max_document_size_mb: 10, retention_days: 90 };
 

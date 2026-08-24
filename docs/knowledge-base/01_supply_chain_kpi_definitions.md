@@ -2,7 +2,7 @@
 
 > 文档类型：指标口径 | 数据性质：合成演示数据 | 版本：2026-08-19
 >
-> 本文是 SupplyMind 为课堂和自动化测试编写的原创摘要，不复制任何商业数据库内容。指标命名参考公开的 [SCOR 数字标准](https://www.ascm.org/standards/scor-ds/) 与 [供应链 KPI 公开定义](https://www.oecd.org/industry/ind/).
+> 本文是 SupplyMind 的演示知识库摘要，不复制任何商业数据库内容。指标命名参考公开的 [SCOR 数字标准](https://www.ascm.org/standards/scor-ds/) 与 [供应链 KPI 公开定义](https://www.oecd.org/industry/ind/).
 
 ## 生产达成率
 

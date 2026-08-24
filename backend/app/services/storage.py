@@ -52,3 +52,25 @@ def get_file(object_key: str) -> bytes:
         region_name="us-east-1",
     )
     return client.get_object(Bucket=settings.s3_bucket, Key=object_key)["Body"].read()
+
+
+def object_exists(object_key: str) -> bool:
+    """Return whether a previously exported object is still retrievable."""
+    settings = get_settings()
+    if not configured():
+        return Path(object_key).is_file()
+    import boto3
+    from botocore.exceptions import BotoCoreError, ClientError
+
+    client = boto3.client(
+        "s3",
+        endpoint_url=settings.s3_endpoint,
+        aws_access_key_id=settings.s3_access_key,
+        aws_secret_access_key=settings.s3_secret_key,
+        region_name="us-east-1",
+    )
+    try:
+        client.head_object(Bucket=settings.s3_bucket, Key=object_key)
+    except (BotoCoreError, ClientError):
+        return False
+    return True

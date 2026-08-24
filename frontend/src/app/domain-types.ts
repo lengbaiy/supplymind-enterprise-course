@@ -24,11 +24,11 @@ export type Report = {
 export type ReportExport = { id: string; format: string; status: string; error_message?: string; attempts?: number; max_attempts?: number; started_at?: string; finished_at?: string; created_at: string; updated_at: string };
 export type AnalysisRun = {
   id: string; status: string; question: string; data_source_id?: string; knowledge_base_id?: string;
-  sql?: string; sql_draft?: string; guard_error?: string; error_message?: string; attempts?: number; max_attempts?: number; started_at?: string; finished_at?: string; result?: Record<string, unknown>; created_at: string;
+  sql?: string; sql_draft?: string; guard_error?: string; error_message?: string; attempts?: number; max_attempts?: number; started_at?: string; finished_at?: string; result?: Record<string, unknown>; route?: string; graph_version?: string; token_usage?: Record<string, number>; estimated_cost_usd?: number; created_at: string;
 };
 export type AgentStep = {
   id: string; name: string; status: string; input_summary: string; output: Record<string, unknown>;
-  elapsed_ms?: number; error_message?: string; created_at: string;
+  elapsed_ms?: number; error_message?: string; prompt_version?: string; created_at: string;
 };
 export type Member = { user_id: string; email: string; display_name: string; role: string; is_active: boolean };
 export type Invitation = { id: string; email: string; role: string; status: string; expires_at: string; created_at: string; token?: string };
@@ -59,3 +59,6 @@ export type SchemaTable = {
   indexes?: { name?: string; column_names?: string[]; unique?: boolean }[]; comment?: string | null; sample_limit?: number;
 };
 export type AuditEventView = AuditEvent;
+export type UserMemory = { id: string; category: string; memory_key: string; content: string; confidence: number; source_run_id?: string; version: number; expires_at?: string; created_at: string; updated_at: string };
+export type MCPServer = { id: string; name: string; transport: "streamable_http" | "stdio"; endpoint?: string; stdio_catalog_key?: string; enabled: boolean; status: string; discovered_tools: { name: string; description?: string }[]; last_checked_at?: string; error_message?: string; created_at: string };
+export type AgentApproval = { id: string; analysis_run_id: string; tool_name: string; side_effect: string; status: string; request_payload: Record<string, unknown>; requested_by: string; decided_by?: string; decision_reason?: string; expires_at?: string; decided_at?: string; created_at: string };

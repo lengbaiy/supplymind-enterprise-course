@@ -25,6 +25,17 @@ def cosine_similarity(left: list[float], right: list[float]) -> float:
 async def search_knowledge(
     session: AsyncSession, tenant_id: str, knowledge_base_id: str, query: str, limit: int = 5
 ) -> list[dict]:
+    from app.rag.retrieval import AdvancedRetriever
+
+    advanced = await AdvancedRetriever().search(
+        session, tenant_id, knowledge_base_id, query, limit
+    )
+    return advanced.results
+
+
+async def search_knowledge_dense_legacy(
+    session: AsyncSession, tenant_id: str, knowledge_base_id: str, query: str, limit: int = 5
+) -> list[dict]:
     vector = (await OpenAICompatibleClient().embed([query]))[0]
     query = (
         select(Chunk, Document)

@@ -2,7 +2,18 @@ import uuid
 from datetime import datetime
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.types import TypeDecorator
 
@@ -184,6 +195,55 @@ class AnalysisRun(TenantModel, Base):
     retry_of_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     result: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     agent_version: Mapped[str] = mapped_column(String(32), default="v1")
+    graph_version: Mapped[str] = mapped_column(String(32), default="enterprise-v2")
+    route: Mapped[str | None] = mapped_column(String(24), nullable=True)
+    checkpoint_thread_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    last_event_sequence: Mapped[int] = mapped_column(Integer, default=0)
+    token_usage: Mapped[dict] = mapped_column(JSON, default=dict)
+    estimated_cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class AnalysisEvent(TenantModel, Base):
+    __tablename__ = "analysis_events"
+    __table_args__ = (
+        UniqueConstraint("analysis_run_id", "sequence", name="uq_analysis_event_sequence"),
+    )
+    analysis_run_id: Mapped[str] = mapped_column(ForeignKey("analysis_runs.id"), index=True)
+    sequence: Mapped[int] = mapped_column(Integer)
+    event_type: Mapped[str] = mapped_column(String(64), index=True)
+    payload: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class AgentApproval(TenantModel, Base):
+    __tablename__ = "agent_approvals"
+    analysis_run_id: Mapped[str] = mapped_column(ForeignKey("analysis_runs.id"), index=True)
+    tool_name: Mapped[str] = mapped_column(String(160))
+    side_effect: Mapped[str] = mapped_column(String(24), default="external_write")
+    status: Mapped[str] = mapped_column(String(24), default="pending", index=True)
+    request_payload: Mapped[dict] = mapped_column(JSON, default=dict)
+    requested_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    decided_by: Mapped[str | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    decision_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class OutboxEvent(TenantModel, Base):
+    __tablename__ = "outbox_events"
+    aggregate_type: Mapped[str] = mapped_column(String(64), index=True)
+    aggregate_id: Mapped[str] = mapped_column(String(36), index=True)
+    event_type: Mapped[str] = mapped_column(String(100), index=True)
+    payload: Mapped[dict] = mapped_column(JSON, default=dict)
+    status: Mapped[str] = mapped_column(String(24), default="pending", index=True)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    available_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -286,11 +346,38 @@ class Document(TenantModel, Base):
 class Chunk(TenantModel, Base):
     __tablename__ = "document_chunks"
     document_id: Mapped[str] = mapped_column(ForeignKey("documents.id"), index=True)
+    parent_chunk_id: Mapped[str | None] = mapped_column(
+        ForeignKey("document_chunks.id"), nullable=True, index=True
+    )
+    level: Mapped[str] = mapped_column(String(16), default="child", index=True)
     ordinal: Mapped[int] = mapped_column(Integer)
     text: Mapped[str] = mapped_column(Text)
+    token_count: Mapped[int] = mapped_column(Integer, default=0)
     location: Mapped[dict] = mapped_column(JSON, default=dict)
     embedding: Mapped[list[float] | None] = mapped_column(EmbeddingVector(1024), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ChunkTerm(TenantModel, Base):
+    __tablename__ = "chunk_terms"
+    __table_args__ = (UniqueConstraint("chunk_id", "term", name="uq_chunk_term"),)
+    knowledge_base_id: Mapped[str] = mapped_column(ForeignKey("knowledge_bases.id"), index=True)
+    chunk_id: Mapped[str] = mapped_column(ForeignKey("document_chunks.id"), index=True)
+    term: Mapped[str] = mapped_column(String(160), index=True)
+    term_frequency: Mapped[int] = mapped_column(Integer)
+    document_length: Mapped[int] = mapped_column(Integer)
+
+
+class KnowledgeCorpusStat(TenantModel, Base):
+    __tablename__ = "knowledge_corpus_stats"
+    __table_args__ = (UniqueConstraint("knowledge_base_id", name="uq_knowledge_corpus_stat"),)
+    knowledge_base_id: Mapped[str] = mapped_column(ForeignKey("knowledge_bases.id"), index=True)
+    child_chunk_count: Mapped[int] = mapped_column(Integer, default=0)
+    average_document_length: Mapped[float] = mapped_column(Float, default=0.0)
+    index_version: Mapped[int] = mapped_column(Integer, default=1)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
 
 class DocumentVersion(TenantModel, Base):
@@ -441,5 +528,61 @@ class FineTuneJob(TenantModel, Base):
     hyperparameters: Mapped[dict] = mapped_column(JSON, default=dict)
     provider_job_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
     failure_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class UserMemorySetting(TenantModel, Base):
+    __tablename__ = "user_memory_settings"
+    __table_args__ = (UniqueConstraint("tenant_id", "user_id", name="uq_user_memory_setting"),)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class UserMemory(TenantModel, Base):
+    __tablename__ = "user_memories"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "user_id", "category", "memory_key", name="uq_user_memory"),
+    )
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    category: Mapped[str] = mapped_column(String(40), index=True)
+    memory_key: Mapped[str] = mapped_column(String(120))
+    content: Mapped[str] = mapped_column(Text)
+    confidence: Mapped[float] = mapped_column(Float, default=1.0)
+    source_run_id: Mapped[str | None] = mapped_column(
+        ForeignKey("analysis_runs.id"), nullable=True, index=True
+    )
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class MCPServer(TenantModel, Base):
+    __tablename__ = "mcp_servers"
+    name: Mapped[str] = mapped_column(String(160))
+    transport: Mapped[str] = mapped_column(String(32), default="streamable_http")
+    endpoint: Mapped[str | None] = mapped_column(Text, nullable=True)
+    stdio_catalog_key: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    encrypted_auth_token: Mapped[str | None] = mapped_column(Text, nullable=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    status: Mapped[str] = mapped_column(String(24), default="unknown")
+    discovered_tools: Mapped[list] = mapped_column(JSON, default=list)
+    last_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class A2ATask(TenantModel, Base):
+    __tablename__ = "a2a_tasks"
+    analysis_run_id: Mapped[str] = mapped_column(ForeignKey("analysis_runs.id"), index=True)
+    context_id: Mapped[str] = mapped_column(String(128), index=True)
+    status: Mapped[str] = mapped_column(String(32), default="submitted", index=True)
     created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

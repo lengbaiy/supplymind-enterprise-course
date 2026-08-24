@@ -14,7 +14,9 @@ from app.models import (
     DataSource,
     DataSourceSyncTask,
     Document,
+    EvaluationRun,
     IngestionTask,
+    OutboxEvent,
     Report,
     ReportExport,
     SchemaSnapshot,
@@ -33,8 +35,104 @@ celery_app.conf.beat_schedule = {
     "reconcile-stalled-tasks": {
         "task": "supplymind.tasks.reconcile_stalled",
         "schedule": 60.0,
-    }
+    },
+    "dispatch-analysis-outbox": {
+        "task": "supplymind.outbox.dispatch",
+        "schedule": 2.0,
+    },
 }
+
+
+@celery_app.task(
+    bind=True,
+    name="supplymind.analysis.execute",
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    max_retries=2,
+)
+def execute_analysis(self, run_id: str) -> str:
+    from app.agents.executor import EnterpriseAnalysisExecutor
+
+    asyncio.run(EnterpriseAnalysisExecutor().execute(run_id))
+    return run_id
+
+
+@celery_app.task(
+    bind=True,
+    name="supplymind.evaluations.run",
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    max_retries=2,
+)
+def execute_evaluation(self, evaluation_id: str) -> str:
+    async def run() -> None:
+        from app.evals.service import run_evaluation
+
+        async with SessionLocal() as session:
+            evaluation = await session.scalar(
+                select(EvaluationRun).where(EvaluationRun.id == evaluation_id)
+            )
+            if not evaluation:
+                return
+            try:
+                await run_evaluation(session, evaluation)
+            except Exception as exc:
+                await session.rollback()
+                evaluation = await session.scalar(
+                    select(EvaluationRun).where(EvaluationRun.id == evaluation_id)
+                )
+                if evaluation:
+                    evaluation.status = "failed"
+                    evaluation.failure_reason = str(exc)[:1000]
+                    await session.commit()
+                raise
+
+    asyncio.run(run())
+    return evaluation_id
+
+
+@celery_app.task(name="supplymind.outbox.dispatch")
+def dispatch_outbox() -> int:
+    async def claim() -> list[tuple[str, str]]:
+        async with SessionLocal() as session:
+            query = (
+                select(OutboxEvent)
+                .where(
+                    OutboxEvent.status == "pending",
+                    OutboxEvent.available_at <= datetime.now(UTC),
+                )
+                .order_by(OutboxEvent.created_at)
+                .limit(50)
+            )
+            if session.get_bind() is not None and session.get_bind().dialect.name == "postgresql":
+                query = query.with_for_update(skip_locked=True)
+            events = list(await session.scalars(query))
+            claimed: list[tuple[str, str]] = []
+            for event in events:
+                event.status = "processing"
+                event.attempts += 1
+                claimed.append((event.id, event.aggregate_id))
+            await session.commit()
+            return claimed
+
+    async def finish(event_id: str, error: str | None = None) -> None:
+        async with SessionLocal() as session:
+            event = await session.scalar(select(OutboxEvent).where(OutboxEvent.id == event_id))
+            if not event:
+                return
+            event.status = "failed" if error else "completed"
+            event.error_message = error
+            event.processed_at = datetime.now(UTC) if not error else None
+            await session.commit()
+
+    claimed = asyncio.run(claim())
+    for event_id, run_id in claimed:
+        try:
+            celery_app.send_task("supplymind.analysis.execute", args=[run_id], queue="analysis")
+            asyncio.run(finish(event_id))
+        except Exception as exc:
+            asyncio.run(finish(event_id, str(exc)[:500]))
+    return len(claimed)
 
 
 @celery_app.task(

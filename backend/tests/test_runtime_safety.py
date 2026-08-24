@@ -24,6 +24,7 @@ def test_trial_runtime_accepts_explicit_secrets() -> None:
         s3_endpoint="http://minio:9000",
         s3_access_key="trial-user",
         s3_secret_key="trial-secret",
+        mcp_service_secret="trial-mcp-secret-that-is-long-enough",
     )
     settings.validate_trial_runtime()
 

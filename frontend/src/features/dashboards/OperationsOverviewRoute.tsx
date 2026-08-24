@@ -9,7 +9,7 @@ import { loadCharts } from "../../services/charts";
 import { AuthScreen } from "../auth/AuthScreen";
 import { OperationsOverviewPage } from "./OperationsOverviewPage";
 
-const paths: Record<NavItem, string> = { "运营总览": "/overview", "项目管理": "/project", "企业管理": "/platform/organizations", "大屏配置": "/dashboard/configuration", "分析会话": "/analysis", "数据源": "/data-sources", "知识库": "/knowledge", "报告中心": "/reports", "组织与审计": "/audit", "系统状态": "/system-status" };
+const paths: Record<NavItem, string> = { "运营总览": "/overview", "项目管理": "/project", "企业管理": "/platform/organizations", "大屏配置": "/dashboard/configuration", "分析会话": "/analysis", "Agent 平台": "/agent-platform", "数据源": "/data-sources", "知识库": "/knowledge", "报告中心": "/reports", "组织与审计": "/audit", "系统状态": "/system-status" };
 type Dimensions = { factories: string[]; product_lines: string[]; suppliers: string[] };
 type DashboardConfig = { dashboard_id: string; refresh_interval_seconds: number; visible_widgets: string[] };
 type ChartOption = Parameters<import("../../services/charts-runtime").ChartInstance["setOption"]>[0];

@@ -6,7 +6,7 @@ import { AppShell } from "../../components/AppShell";
 import { API_BASE, apiRequest } from "../../services/api";
 import { DashboardConfigurationPage } from "./DashboardConfigurationPage";
 
-const paths: Record<NavItem, string> = { "运营总览": "/overview", "项目管理": "/project", "企业管理": "/platform/organizations", "大屏配置": "/dashboard/configuration", "分析会话": "/analysis", "数据源": "/data-sources", "知识库": "/knowledge", "报告中心": "/reports", "组织与审计": "/audit", "系统状态": "/system-status" };
+const paths: Record<NavItem, string> = { "运营总览": "/overview", "项目管理": "/project", "企业管理": "/platform/organizations", "大屏配置": "/dashboard/configuration", "分析会话": "/analysis", "Agent 平台": "/agent-platform", "数据源": "/data-sources", "知识库": "/knowledge", "报告中心": "/reports", "组织与审计": "/audit", "系统状态": "/system-status" };
 type Config = { dashboard_id: string; refresh_interval_seconds: number; visible_widgets: string[] };
 
 export function DashboardConfigurationRoute() {

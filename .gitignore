@@ -1,5 +1,6 @@
 .idea/
 frontend/test-results/
+test-results/
 tmp/
 .env
 **/__pycache__/

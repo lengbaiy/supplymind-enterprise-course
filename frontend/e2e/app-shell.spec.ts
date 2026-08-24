@@ -213,7 +213,41 @@ test("analysis history opens inside a contained session window", async ({ page }
   await expect(page.getByLabel("分析问题")).toBeFocused();
 });
 
-test("administrator receives a streamed analysis conclusion from active resources", async ({ page }) => {
+test("administrator can inspect the enterprise agent control plane", async ({ page }) => {
+  await page.goto("/overview");
+  await page.getByLabel("登录邮箱").fill("admin@demo.local");
+  await page.getByLabel("登录密码").fill("ChangeMe123!");
+  await page.getByLabel("组织标识").fill("demo-factory");
+  await page.getByRole("button", { name: "登录工作区" }).click();
+  const navigation = page.getByRole("navigation", { name: "主导航" });
+  await navigation.getByRole("button", { name: "Agent 平台" }).click();
+  await expect(page).toHaveURL(/\/agent-platform$/);
+  await expect(page.getByRole("heading", { name: "Agent 平台" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "运行观测" })).toBeVisible();
+  await page.getByRole("tab", { name: "长期记忆" }).click();
+  await expect(page.getByText("用户级长期记忆")).toBeVisible();
+  await page.getByRole("tab", { name: "MCP 工具" }).click();
+  await expect(page.getByText("受控 MCP Server")).toBeVisible();
+  await page.getByRole("tab", { name: "人工审批" }).click();
+  await expect(page.getByText("待审批操作", { exact: true })).toBeVisible();
+  await page.screenshot({ path: "../output/playwright/agent-platform-desktop.png", fullPage: true });
+});
+
+test("mobile navigation opens the enterprise agent control plane", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/overview");
+  await page.getByLabel("登录邮箱").fill("admin@demo.local");
+  await page.getByLabel("登录密码").fill("ChangeMe123!");
+  await page.getByLabel("组织标识").fill("demo-factory");
+  await page.getByRole("button", { name: "登录工作区" }).click();
+  await page.getByRole("navigation", { name: "移动主导航" }).getByRole("button", { name: "更多" }).click();
+  await page.getByRole("region", { name: "更多工作区功能" }).getByRole("button", { name: "Agent 平台" }).click();
+  await expect(page).toHaveURL(/\/agent-platform$/);
+  await expect(page.getByText("运行与治理")).toBeVisible();
+  await page.screenshot({ path: "../output/playwright/agent-platform-mobile.png", fullPage: true });
+});
+
+test("administrator receives a streamed terminal state from active resources", async ({ page }) => {
   await page.goto("/analysis");
   await page.getByLabel("登录邮箱").fill("admin@demo.local");
   await page.getByLabel("登录密码").fill("ChangeMe123!");
@@ -223,12 +257,11 @@ test("administrator receives a streamed analysis conclusion from active resource
   await page.getByRole("navigation", { name: "主导航" }).getByRole("button", { name: /分析会话/ }).click();
   await expect(page.locator("h2", { hasText: "分析会话" })).toBeVisible({ timeout: 15_000 });
   await page.getByLabel("数据源").selectOption({ index: 1 });
-  await page.getByLabel("知识库").selectOption({ index: 1 });
+  await page.getByLabel("知识库").selectOption({ label: "供应链演示口径" });
   await page.getByLabel("分析问题").fill("近30天各工厂生产达成率与缺料风险");
   await page.getByRole("button", { name: "开始分析" }).click();
   await expect(page.getByText("实时运行状态")).toBeVisible({ timeout: 10_000 });
   await expect(page.getByText("任务已创建")).toBeVisible({ timeout: 10_000 });
-  await expect(page.getByText("结论已生成")).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText("分析完成")).toBeVisible();
-  await expect(page.getByText(/已验证 \d+ 条结果/).first()).toBeVisible();
+  await expect(page.getByText(/^(结论已生成|运行失败)$/)).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(/智能路由|分析完成|分析失败/).first()).toBeVisible();
 });

@@ -59,7 +59,9 @@ Every response includes `X-Trace-ID`. Pass the same value in `X-Trace-ID` when c
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| POST | `/analyses/stream` | Start an idempotent real analysis SSE stream. Requires a selected source and knowledge base. |
+| POST | `/analyses` | Create an idempotent asynchronous analysis and return its recoverable stream URL. |
+| GET | `/analyses/{id}/stream` | Replay durable SSE events. Send `Last-Event-ID` to resume after a disconnect. |
+| POST | `/analyses/stream` | Backward-compatible endpoint that creates an analysis and streams events in one response. |
 | GET | `/analyses/{id}` | Read run status, SQL draft/final SQL, Guard error and result. |
 | GET | `/analyses/{id}/steps` | Read the persisted Agent trace. |
 | GET | `/analyses/{id}/events` | Recover a run after an SSE disconnect. |
@@ -71,6 +73,30 @@ Every response includes `X-Trace-ID`. Pass the same value in `X-Trace-ID` when c
 | GET | `/reports/{id}/exports/pdf` | Read queued/running/completed/failed export status. |
 | POST | `/reports/{id}/exports/{export_id}/retry` | Retry a failed export. |
 | GET | `/reports/{id}/exports/pdf/download` | Download the completed local or MinIO/S3 object. |
+
+## Agent Runtime, Memory and Tooling
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET/PATCH | `/me/memory/settings` | Read or change the current user's long-term-memory setting. |
+| GET/POST | `/me/memories` | List or add tenant/user-scoped allowlisted memories. |
+| PATCH/DELETE | `/me/memories/{id}` | Edit or remove one memory. |
+| DELETE | `/me/memories` | Clear all memories for the current user. |
+| GET/POST | `/mcp/servers` | List or register an approved external MCP Server (organization admin). |
+| PATCH/DELETE | `/mcp/servers/{id}` | Enable, update or remove a registered Server. |
+| POST | `/mcp/servers/{id}/test` | Discover tools through the configured transport. |
+| GET | `/agent-approvals?status=pending` | List pending tool approvals. |
+| POST | `/agent-approvals/{id}/approve` | Approve an export or other side-effecting tool request. |
+| POST | `/agent-approvals/{id}/reject` | Reject an approval request. |
+| POST | `/ai/evaluations` | Queue evaluation for an approved dataset version. |
+| GET | `/ai/evaluations` | Read evaluation status, metrics and failed gates. |
+
+## A2A
+
+`GET /.well-known/agent-card.json` exposes the read-only Agent Card. `POST /a2a`
+accepts JSON-RPC `message/send`, `tasks/get` and `tasks/cancel`; use
+`GET /a2a/tasks/{id}/stream` with `Last-Event-ID` for task events. A2A uses the
+same JWT organization boundary and does not expose write tools or credentials.
 
 ## Dashboards, Audit and Status
 

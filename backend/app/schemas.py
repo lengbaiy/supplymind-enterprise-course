@@ -212,6 +212,13 @@ class AnalysisRequest(BaseModel):
     context: list[str] = Field(default_factory=list, max_length=12)
 
 
+class AnalysisAccepted(BaseModel):
+    run_id: str
+    conversation_id: str
+    status: Literal["queued"] = "queued"
+    stream_url: str
+
+
 class ConversationMessageView(BaseModel):
     id: str
     conversation_id: str
@@ -219,6 +226,97 @@ class ConversationMessageView(BaseModel):
     content: str
     metadata: dict = Field(default_factory=dict)
     created_at: datetime
+
+
+class MemorySettingView(BaseModel):
+    enabled: bool
+
+
+class MemorySettingUpdate(BaseModel):
+    enabled: bool
+
+
+class UserMemoryCreate(BaseModel):
+    category: Literal[
+        "communication",
+        "kpi_interest",
+        "factory_scope",
+        "product_line",
+        "time_range",
+        "role_context",
+    ]
+    memory_key: str = Field(min_length=1, max_length=120, pattern=r"^[a-zA-Z0-9_.:-]+$")
+    content: str = Field(min_length=1, max_length=2000)
+    confidence: float = Field(default=1.0, ge=0.8, le=1.0)
+    expires_at: datetime | None = None
+
+
+class UserMemoryUpdate(BaseModel):
+    content: str = Field(min_length=1, max_length=2000)
+    confidence: float = Field(default=1.0, ge=0.8, le=1.0)
+    expires_at: datetime | None = None
+
+
+class UserMemoryView(BaseModel):
+    id: str
+    category: str
+    memory_key: str
+    content: str
+    confidence: float
+    source_run_id: str | None
+    version: int
+    expires_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class MCPServerCreate(BaseModel):
+    name: str = Field(min_length=2, max_length=160)
+    transport: Literal["streamable_http", "stdio"] = "streamable_http"
+    endpoint: str | None = Field(default=None, max_length=2000)
+    stdio_catalog_key: str | None = Field(default=None, max_length=120)
+    auth_token: str | None = Field(default=None, max_length=4000)
+
+
+class MCPServerUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=2, max_length=160)
+    enabled: bool | None = None
+    endpoint: str | None = Field(default=None, max_length=2000)
+    stdio_catalog_key: str | None = Field(default=None, max_length=120)
+    auth_token: str | None = Field(default=None, max_length=4000)
+
+
+class MCPServerView(BaseModel):
+    id: str
+    name: str
+    transport: str
+    endpoint: str | None
+    stdio_catalog_key: str | None
+    enabled: bool
+    status: str
+    discovered_tools: list
+    last_checked_at: datetime | None
+    error_message: str | None
+    created_at: datetime
+
+
+class AgentApprovalView(BaseModel):
+    id: str
+    analysis_run_id: str
+    tool_name: str
+    side_effect: str
+    status: str
+    request_payload: dict
+    requested_by: str
+    decided_by: str | None
+    decision_reason: str | None
+    expires_at: datetime | None
+    decided_at: datetime | None
+    created_at: datetime
+
+
+class ApprovalDecision(BaseModel):
+    reason: str = Field(default="", max_length=1000)
 
 
 class TrainingDatasetCreate(BaseModel):
@@ -294,6 +392,22 @@ class ModelVersionView(BaseModel):
     created_at: datetime
 
 
+class EvaluationRunCreate(BaseModel):
+    dataset_version_id: str
+    model_version_id: str | None = None
+
+
+class EvaluationRunView(BaseModel):
+    id: str
+    dataset_version_id: str
+    model_version_id: str | None
+    status: str
+    metrics: dict
+    failure_reason: str | None
+    created_by: str
+    created_at: datetime
+
+
 class FineTuneJobCreate(BaseModel):
     dataset_version_id: str
     base_model_version_id: str
@@ -332,6 +446,11 @@ class AnalysisView(BaseModel):
     max_attempts: int = 3
     error_message: str | None = None
     result: dict | None
+    graph_version: str = "enterprise-v2"
+    route: str | None = None
+    last_event_sequence: int = 0
+    token_usage: dict = Field(default_factory=dict)
+    estimated_cost_usd: float = 0.0
     created_at: datetime
 
 

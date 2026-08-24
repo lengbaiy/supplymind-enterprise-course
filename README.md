@@ -1,8 +1,6 @@
 # SupplyMind
 
-SupplyMind 是一个面向制造业供应链场景的多租户、只读 AI 数据分析控制台。项目用于演示企业级数据分析平台的完整开发方式：安全接入业务数据库，管理知识库口径，通过 AI 生成受控 SQL，返回可追溯的分析结果，并生成报告、审计和运行状态。
-
-本项目是原创教学实现，架构设计参考企业级数据分析平台常见模式，不是 DB-GPT 的 fork，也不包含 DB-GPT 代码或品牌资源。
+SupplyMind 是一个面向制造业供应链场景的多租户、只读 Agent 数据分析平台。它安全接入业务数据库与知识库，通过持久化多 Agent 运行时生成受控 SQL、可追溯的结论和报告，并提供审计、审批、评测和可观测性能力。
 
 ## 项目能力
 
@@ -10,20 +8,24 @@ SupplyMind 是一个面向制造业供应链场景的多租户、只读 AI 数�
 - 登录与权限：本地账号、刷新令牌、OIDC 接入入口、固定角色权限矩阵。
 - 只读数据源：PostgreSQL/MySQL 连接测试、Schema 同步、表白名单、连接状态。
 - SQL 安全：只允许单条 `SELECT` 或 `WITH`，禁止写操作、多语句、危险函数和越权表。
-- 知识库：Markdown/TXT/PDF 上传、文本抽取、分块、Embedding、检索引用。
-- AI 分析：数据源选择、知识库选择、八阶段 Agent 轨迹、SSE 流式状态、SQL Guard、结果表、图表和洞察。
+- 多 Agent 运行时：LangGraph `TypedDict + Annotated` 状态流，Handoffs、结构化 Router、并行 `Send` Subagents、条件回退和事实校验。
+- Advanced RAG：父子分块、Multi-Query、HyDE、Dense、PostgreSQL BM25、RRF、Rerank、父文档上下文和来源定位。
+- 长短期记忆：PostgreSQL Checkpointer 支持会话恢复；用户级长期记忆带类别白名单、置信度、版本、过期和自助控制。
+- MCP 与 A2A：独立标准 MCP Server、Streamable HTTP/受控 stdio Client、工具 RBAC、审批；只读 A2A Agent Card、任务与流式结果接口。
+- AI 分析：数据源选择、知识库选择、Router/Handoff/Subagent/RAG Trace、SSE 流式状态和断线续传、SQL Guard、结果表、图表和洞察。
 - 报告中心：Markdown 报告、PDF 导出任务、MinIO/S3 对象存储、下载权限校验。
 - 供应链大屏：采购交付、生产达成、库存健康、质量合格率、订单履约等指标。
-- 审计与状态：Trace ID、审计筛选、系统状态、Worker 状态、失败任务和依赖健康。
-- 工程交付：Docker Compose、Alembic、pytest、Ruff、Vitest、Playwright、Helm、CI 和安全扫描。
+- 可靠性：Celery Worker、事务 Outbox、持久化分析事件、心跳、`Last-Event-ID`、取消和重试。
+- 可观测与评测：GenAI OTLP Span、Prometheus 指标、Phoenix/Grafana Profile、评测 Worker 和 CI 质量门禁。
+- 工程交付：Docker Compose、Alembic、pytest、Ruff、Vitest、Playwright、Helm、GitHub Actions、SBOM 和镜像安全扫描。
 
 ## 技术栈
 
 - Backend：FastAPI、SQLAlchemy、Alembic、PostgreSQL/pgvector、Redis、Celery。
 - Frontend：React、TypeScript、Vite、React Router、ECharts、Playwright。
 - Storage：MinIO，本地模拟 S3 兼容对象存储。
-- AI：OpenAI-compatible Chat API 和 Embedding API。
-- DevOps：Docker Compose、Helm、GitHub Actions、Prometheus、Grafana。
+- AI：LangChain 1.x、LangGraph 1.x、OpenAI-compatible Chat/Embedding/Rerank、MCP、A2A、LiteLLM Gateway。
+- DevOps：Docker Compose、Helm、GitHub Actions、OpenTelemetry、Phoenix、Prometheus、Grafana。
 
 ## 环境要求
 
@@ -61,6 +63,7 @@ Invoke-RestMethod http://localhost:8000/api/v1/health/ready
 - MinIO 控制台：`http://localhost:9001`
 - Prometheus：`http://localhost:9090`
 - Grafana：`http://localhost:3000`
+- MCP Server：`http://localhost:8001/mcp`
 
 默认演示组织和账号：
 
@@ -136,7 +139,29 @@ SUPPLYMIND_EMBEDDING_DIMENSION=1024
 
 不配置 Chat 和 Embedding 时，登录、数据源、权限、报告列表、大屏和大部分界面仍可运行；真实分析、Embedding 和 RAG 检索会明确失败并返回 Trace ID，不会返回模拟结论。
 
-完整配置说明见 [docs/CONFIGURATION.md](docs/CONFIGURATION.md)。
+除了 Chat 与 Embedding，首次部署还必须替换 `SUPPLYMIND_JWT_SECRET`、`SUPPLYMIND_CREDENTIAL_KEY` 和 `SUPPLYMIND_MCP_SERVICE_SECRET`。所有变量、模型网关、MCP 白名单、Rerank、OTLP 与评测阈值见 [docs/CONFIGURATION.md](docs/CONFIGURATION.md)。
+
+## 企业 Profiles
+
+基础环境已包含 API、Worker、Beat、MCP Server、PostgreSQL、Redis、MinIO、演示数据源和前端：
+
+```powershell
+docker compose up -d --build
+```
+
+启用 LiteLLM 模型网关：
+
+```powershell
+docker compose --profile enterprise-ai up -d
+```
+
+启用 OpenTelemetry Collector、Phoenix、Prometheus 与 Grafana：
+
+```powershell
+docker compose --profile observability up -d
+```
+
+两个 Profile 可同时开启。配置字段和资源要求见 [docs/CONFIGURATION.md](docs/CONFIGURATION.md)。
 
 ## 常用命令
 
@@ -189,6 +214,7 @@ powershell -ExecutionPolicy Bypass -File scripts/acceptance-report.ps1 -RunTests
 ```powershell
 docker compose exec -T api pytest -q
 docker compose exec -T api ruff check app scripts tests
+docker compose exec -T api python -m scripts.evaluation_gate
 ```
 
 前端测试和构建：
@@ -224,7 +250,7 @@ backend/    FastAPI API、领域服务、Celery 任务、Alembic 迁移和后端
 frontend/   React/TypeScript 控制台、页面、组件、API 客户端和浏览器测试
 database/   演示数据、数据库说明和种子脚本
 infra/      Prometheus、Grafana、Helm 和部署相关配置
-docs/       配置、安全、API、部署、验收、回滚和企业演练文档
+docs/       配置、安全、API、架构、部署、验收与回滚文档
 scripts/    本地验收、环境重置和 Helm 检查脚本
 ```
 
@@ -237,6 +263,7 @@ scripts/    本地验收、环境重置和 Helm 检查脚本
 - Helm 部署：[docs/HELM_DEPLOYMENT.md](docs/HELM_DEPLOYMENT.md)
 - 回滚说明：[docs/ROLLBACK_RUNBOOK.md](docs/ROLLBACK_RUNBOOK.md)
 - 验收清单：[docs/ACCEPTANCE_CHECKLIST.md](docs/ACCEPTANCE_CHECKLIST.md)
+- 试运行部署：[docs/TRIAL_DEPLOYMENT.md](docs/TRIAL_DEPLOYMENT.md)
 
 ## 安全边界
 
@@ -299,7 +326,7 @@ powershell -ExecutionPolicy Bypass -File scripts/reset-demo.ps1 -Build
 powershell -ExecutionPolicy Bypass -File scripts/reset-demo.ps1 -WithVolumes -Build
 ```
 
-这会删除本地演示数据，只能用于课堂或开发环境。
+这会删除本地演示数据，只能用于开发环境。
 
 ## License and notices
 

@@ -157,6 +157,23 @@ export function AnalysisRoute() {
     },
     [refreshRuns],
   );
+  const resumeRunStream = useCallback(async (runId: string, initialEventId = 0) => {
+    let lastEventId = initialEventId;
+    for (let retry = 0; retry < 4; retry += 1) {
+      const response = await fetch(`${API_BASE}/analyses/${runId}/stream`, {
+        headers: { Authorization: `Bearer ${token}`, "Last-Event-ID": String(lastEventId) },
+      });
+      if (!response.ok) throw new Error("无法恢复分析事件流");
+      await readSseResponse(response, (events) => events.forEach((event) => {
+        if (event.id) lastEventId = event.id;
+        update(event);
+      }));
+      const run = await api<AnalysisRun>(`/analyses/${runId}`);
+      if (["completed", "failed", "cancelled", "rejected", "waiting_approval"].includes(run.status)) return;
+      await new Promise((resolve) => window.setTimeout(resolve, 700 * (retry + 1)));
+    }
+    throw new Error("事件流多次中断，请从运行历史恢复查看");
+  }, [api, token, update]);
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (!sourceId || !knowledgeBaseId)
@@ -166,7 +183,7 @@ export function AnalysisRoute() {
     setError("");
     setStream(freshSnapshot());
     try {
-      const response = await fetch(`${API_BASE}/analyses/stream`, {
+      const response = await fetch(`${API_BASE}/analyses`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -191,7 +208,9 @@ export function AnalysisRoute() {
           `${message}（Trace ID: ${response.headers.get("x-trace-id") || "-"}）`,
         );
       }
-      await readSseResponse(response, (events) => events.forEach(update));
+      const accepted = await response.json() as { run_id: string };
+      setStream((current) => ({ ...current, runId: accepted.run_id }));
+      await resumeRunStream(accepted.run_id);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "分析失败");
     } finally {
@@ -227,6 +246,7 @@ export function AnalysisRoute() {
         "企业管理",
         "大屏配置",
         "分析会话",
+        "Agent 平台",
         "数据源",
         "知识库",
         "报告中心",
@@ -243,6 +263,7 @@ export function AnalysisRoute() {
               企业管理: "/platform/organizations",
               大屏配置: "/dashboard/configuration",
               分析会话: "/analysis",
+              "Agent 平台": "/agent-platform",
               数据源: "/data-sources",
               知识库: "/knowledge",
               报告中心: "/reports",

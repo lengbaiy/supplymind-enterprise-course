@@ -32,6 +32,9 @@ const OrganizationAuditRoute = lazy(() =>
 const KnowledgeRoute = lazy(() =>
   import("../features/knowledge/KnowledgeRoute").then((module) => ({ default: module.KnowledgeRoute })),
 );
+const AgentPlatformRoute = lazy(() =>
+  import("../features/agents/AgentPlatformRoute").then((module) => ({ default: module.AgentPlatformRoute })),
+);
 
 export const NAV_PATHS: Record<NavItem, string> = {
   "运营总览": "/overview",
@@ -39,6 +42,7 @@ export const NAV_PATHS: Record<NavItem, string> = {
   "企业管理": "/platform/organizations",
   "大屏配置": "/dashboard/configuration",
   "分析会话": "/analysis",
+  "Agent 平台": "/agent-platform",
   "数据源": "/data-sources",
   "知识库": "/knowledge",
   "报告中心": "/reports",
@@ -55,6 +59,7 @@ export function AppRoutes() {
     <Routes>
       <Route path="/" element={<Navigate to={NAV_PATHS["运营总览"]} replace />} />
       <Route path="/analysis" element={<Suspense fallback={<RouteLoading />}><AnalysisRoute /></Suspense>} />
+      <Route path="/agent-platform" element={<Suspense fallback={<RouteLoading />}><AgentPlatformRoute /></Suspense>} />
       <Route path="/data-sources" element={<Suspense fallback={<RouteLoading />}><DataSourcesRoute /></Suspense>} />
       <Route path="/overview" element={<Suspense fallback={<RouteLoading />}><OperationsOverviewRoute /></Suspense>} />
       <Route path="/reports" element={<Suspense fallback={<RouteLoading />}><ReportsRoute /></Suspense>} />

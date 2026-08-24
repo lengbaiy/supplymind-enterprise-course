@@ -10,6 +10,7 @@ import httpx
 import jwt
 from fastapi import (
     APIRouter,
+    Body,
     Depends,
     File,
     Form,
@@ -29,6 +30,7 @@ from app.core.config import get_settings
 from app.core.security import (
     create_access_token,
     create_refresh_token,
+    decrypt_secret,
     encrypt_secret,
     hash_oidc_state,
     hash_password,
@@ -38,7 +40,11 @@ from app.core.security import (
 from app.core.sql_guard import SQLGuardError
 from app.db import get_session, set_tenant_context
 from app.dependencies import get_principal, require_role
+from app.mcp_runtime.client import MCPClientManager, stdio_catalog, validate_mcp_endpoint
+from app.memory.service import MemoryPolicyError, MemoryService
 from app.models import (
+    A2ATask,
+    AgentApproval,
     AgentStep,
     AnalysisRun,
     AuditEvent,
@@ -52,9 +58,11 @@ from app.models import (
     DataSourceSyncTask,
     Document,
     DocumentVersion,
+    EvaluationRun,
     FineTuneJob,
     IngestionTask,
     KnowledgeBase,
+    MCPServer,
     MemberInvitation,
     Membership,
     ModelVersion,
@@ -67,8 +75,8 @@ from app.models import (
     TrainingDataset,
     TrainingExample,
     User,
+    UserMemory,
 )
-from app.modules.analysis.service import AnalysisService
 from app.modules.datasources.service import (
     DataSourceError,
     ensure_source_enabled,
@@ -80,9 +88,12 @@ from app.modules.datasources.service import (
 from app.modules.knowledge.service import get_tenant_knowledge_base, search_tenant_knowledge
 from app.modules.reports.service import get_tenant_report, render_markdown, render_pdf
 from app.schemas import (
+    AgentApprovalView,
     AgentStepView,
+    AnalysisAccepted,
     AnalysisRequest,
     AnalysisView,
+    ApprovalDecision,
     ConversationMessageView,
     DatasetVersionView,
     DataSourceAllowlistUpdate,
@@ -93,6 +104,8 @@ from app.schemas import (
     DocumentMetadataUpdate,
     DocumentVersionView,
     DocumentView,
+    EvaluationRunCreate,
+    EvaluationRunView,
     FineTuneJobCreate,
     FineTuneJobView,
     IngestionTaskView,
@@ -101,12 +114,17 @@ from app.schemas import (
     KnowledgeBaseView,
     KnowledgeSearchRequest,
     LoginRequest,
+    MCPServerCreate,
+    MCPServerUpdate,
+    MCPServerView,
     MemberInvitationAccept,
     MemberInvitationCreate,
     MemberInvitationView,
     MemberRoleUpdate,
     MemberStatusUpdate,
     MemberView,
+    MemorySettingUpdate,
+    MemorySettingView,
     ModelVersionCreate,
     ModelVersionView,
     OrganizationAccessView,
@@ -131,15 +149,419 @@ from app.schemas import (
     TrainingDatasetView,
     TrainingExampleCreate,
     TrainingExampleView,
+    UserMemoryCreate,
+    UserMemoryUpdate,
+    UserMemoryView,
 )
 from app.services.audit import audit
+from app.services.events import append_event, create_outbox_event, stream_events
 from app.services.ingestion import process_ingestion
 from app.services.knowledge import KnowledgeError, extract_text, sha256
 from app.services.llm import ModelConfigurationError, ModelResponseError
 from app.services.storage import configured as storage_configured
-from app.services.storage import get_file, put_file
+from app.services.storage import get_file, object_exists, put_file
 
 router = APIRouter(prefix="/api/v1")
+a2a_router = APIRouter()
+
+
+def export_asset_available(export: ReportExport) -> bool:
+    if export.storage_backend == "s3":
+        return bool(export.object_key and object_exists(export.object_key))
+    return bool(export.file_path and Path(export.file_path).is_file())
+
+
+@router.get("/conversations")
+async def list_conversations(
+    session: AsyncSession = Depends(get_session),
+    principal: Principal = Depends(get_principal),
+) -> list[dict]:
+    rows = list(
+        await session.scalars(
+            select(Conversation)
+            .where(
+                Conversation.tenant_id == principal.tenant_id,
+                Conversation.created_by == principal.user_id,
+            )
+            .order_by(Conversation.created_at.desc())
+            .limit(100)
+        )
+    )
+    return [{"id": item.id, "title": item.title, "created_at": item.created_at} for item in rows]
+
+
+@router.post("/conversations", status_code=status.HTTP_201_CREATED)
+async def create_conversation(
+    title: str = Query(default="新分析会话", min_length=1, max_length=240),
+    session: AsyncSession = Depends(get_session),
+    principal: Principal = Depends(require_role("analyst", "org_admin", "platform_admin")),
+) -> dict:
+    conversation = Conversation(
+        tenant_id=principal.tenant_id,
+        title=title,
+        created_by=principal.user_id,
+    )
+    session.add(conversation)
+    await session.commit()
+    await session.refresh(conversation)
+    return {
+        "id": conversation.id,
+        "title": conversation.title,
+        "created_at": conversation.created_at,
+    }
+
+
+@router.get("/me/memory/settings", response_model=MemorySettingView)
+async def get_memory_settings(
+    session: AsyncSession = Depends(get_session),
+    principal: Principal = Depends(get_principal),
+) -> MemorySettingView:
+    enabled = await MemoryService().enabled(session, principal.tenant_id, principal.user_id)
+    return MemorySettingView(enabled=enabled)
+
+
+@router.patch("/me/memory/settings", response_model=MemorySettingView)
+async def update_memory_settings(
+    payload: MemorySettingUpdate,
+    session: AsyncSession = Depends(get_session),
+    principal: Principal = Depends(get_principal),
+) -> MemorySettingView:
+    setting = await MemoryService().set_enabled(
+        session, principal.tenant_id, principal.user_id, payload.enabled
+    )
+    await session.commit()
+    return MemorySettingView(enabled=setting.enabled)
+
+
+@router.get("/me/memories", response_model=list[UserMemoryView])
+async def list_user_memories(
+    category: str | None = Query(default=None, max_length=40),
+    session: AsyncSession = Depends(get_session),
+    principal: Principal = Depends(get_principal),
+) -> list[UserMemoryView]:
+    rows = await MemoryService().list(session, principal.tenant_id, principal.user_id, category)
+    return [UserMemoryView.model_validate(item, from_attributes=True) for item in rows]
+
+
+@router.post("/me/memories", response_model=UserMemoryView, status_code=status.HTTP_201_CREATED)
+async def create_user_memory(
+    payload: UserMemoryCreate,
+    session: AsyncSession = Depends(get_session),
+    principal: Principal = Depends(get_principal),
+) -> UserMemoryView:
+    try:
+        item = await MemoryService().upsert(
+            session,
+            principal.tenant_id,
+            principal.user_id,
+            **payload.model_dump(),
+        )
+    except MemoryPolicyError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    await session.commit()
+    await session.refresh(item)
+    return UserMemoryView.model_validate(item, from_attributes=True)
+
+
+@router.patch("/me/memories/{memory_id}", response_model=UserMemoryView)
+async def update_user_memory(
+    memory_id: str,
+    payload: UserMemoryUpdate,
+    session: AsyncSession = Depends(get_session),
+    principal: Principal = Depends(get_principal),
+) -> UserMemoryView:
+    existing = await session.scalar(
+        select(UserMemory).where(
+            UserMemory.id == memory_id,
+            UserMemory.tenant_id == principal.tenant_id,
+            UserMemory.user_id == principal.user_id,
+        )
+    )
+    if not existing:
+        raise HTTPException(status_code=404, detail="Memory not found")
+    try:
+        item = await MemoryService().upsert(
+            session,
+            principal.tenant_id,
+            principal.user_id,
+            category=existing.category,
+            memory_key=existing.memory_key,
+            **payload.model_dump(),
+            source_run_id=existing.source_run_id,
+        )
+    except MemoryPolicyError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    await session.commit()
+    await session.refresh(item)
+    return UserMemoryView.model_validate(item, from_attributes=True)
+
+
+@router.delete("/me/memories/{memory_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_user_memory(
+    memory_id: str,
+    session: AsyncSession = Depends(get_session),
+    principal: Principal = Depends(get_principal),
+) -> Response:
+    removed = await MemoryService().delete(
+        session, principal.tenant_id, principal.user_id, memory_id
+    )
+    if not removed:
+        raise HTTPException(status_code=404, detail="Memory not found")
+    await session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.delete("/me/memories", status_code=status.HTTP_204_NO_CONTENT)
+async def clear_user_memories(
+    session: AsyncSession = Depends(get_session),
+    principal: Principal = Depends(get_principal),
+) -> Response:
+    await MemoryService().delete(session, principal.tenant_id, principal.user_id)
+    await session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+def _validate_mcp_connection(
+    transport: str, endpoint: str | None, stdio_catalog_key: str | None
+) -> None:
+    if transport == "streamable_http":
+        if not endpoint:
+            raise HTTPException(status_code=422, detail="HTTP MCP server requires an endpoint")
+        try:
+            validate_mcp_endpoint(endpoint)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+    elif stdio_catalog_key not in stdio_catalog():
+        raise HTTPException(status_code=422, detail="Unknown MCP stdio catalog entry")
+
+
+@router.get("/mcp/servers", response_model=list[MCPServerView])
+async def list_mcp_servers(
+    session: AsyncSession = Depends(get_session),
+    principal: Principal = Depends(require_role("org_admin", "platform_admin")),
+) -> list[MCPServerView]:
+    rows = list(
+        await session.scalars(
+            select(MCPServer)
+            .where(MCPServer.tenant_id == principal.tenant_id)
+            .order_by(MCPServer.created_at.desc())
+        )
+    )
+    return [MCPServerView.model_validate(item, from_attributes=True) for item in rows]
+
+
+@router.post("/mcp/servers", response_model=MCPServerView, status_code=status.HTTP_201_CREATED)
+async def create_mcp_server(
+    payload: MCPServerCreate,
+    session: AsyncSession = Depends(get_session),
+    principal: Principal = Depends(require_role("org_admin", "platform_admin")),
+) -> MCPServerView:
+    _validate_mcp_connection(payload.transport, payload.endpoint, payload.stdio_catalog_key)
+    item = MCPServer(
+        tenant_id=principal.tenant_id,
+        name=payload.name,
+        transport=payload.transport,
+        endpoint=payload.endpoint,
+        stdio_catalog_key=payload.stdio_catalog_key,
+        encrypted_auth_token=encrypt_secret(payload.auth_token) if payload.auth_token else None,
+        created_by=principal.user_id,
+    )
+    session.add(item)
+    await session.commit()
+    await session.refresh(item)
+    return MCPServerView.model_validate(item, from_attributes=True)
+
+
+@router.patch("/mcp/servers/{server_id}", response_model=MCPServerView)
+async def update_mcp_server(
+    server_id: str,
+    payload: MCPServerUpdate,
+    session: AsyncSession = Depends(get_session),
+    principal: Principal = Depends(require_role("org_admin", "platform_admin")),
+) -> MCPServerView:
+    item = await session.scalar(
+        select(MCPServer).where(
+            MCPServer.id == server_id,
+            MCPServer.tenant_id == principal.tenant_id,
+        )
+    )
+    if not item:
+        raise HTTPException(status_code=404, detail="MCP server not found")
+    values = payload.model_dump(exclude_unset=True)
+    token = values.pop("auth_token", None)
+    for key, value in values.items():
+        setattr(item, key, value)
+    if token is not None:
+        item.encrypted_auth_token = encrypt_secret(token) if token else None
+    _validate_mcp_connection(item.transport, item.endpoint, item.stdio_catalog_key)
+    await session.commit()
+    await session.refresh(item)
+    return MCPServerView.model_validate(item, from_attributes=True)
+
+
+@router.post("/mcp/servers/{server_id}/test", response_model=MCPServerView)
+async def test_mcp_server(
+    server_id: str,
+    session: AsyncSession = Depends(get_session),
+    principal: Principal = Depends(require_role("org_admin", "platform_admin")),
+) -> MCPServerView:
+    item = await session.scalar(
+        select(MCPServer).where(
+            MCPServer.id == server_id,
+            MCPServer.tenant_id == principal.tenant_id,
+        )
+    )
+    if not item:
+        raise HTTPException(status_code=404, detail="MCP server not found")
+    try:
+        tools = await MCPClientManager().discover(
+            transport=item.transport,
+            endpoint=item.endpoint,
+            stdio_catalog_key=item.stdio_catalog_key,
+            auth_token=(
+                decrypt_secret(item.encrypted_auth_token) if item.encrypted_auth_token else None
+            ),
+        )
+        item.discovered_tools = tools
+        item.status = "healthy"
+        item.error_message = None
+    except (OSError, RuntimeError, ValueError) as exc:
+        item.status = "failed"
+        item.error_message = str(exc)[:500]
+    item.last_checked_at = datetime.now(UTC)
+    await session.commit()
+    await session.refresh(item)
+    return MCPServerView.model_validate(item, from_attributes=True)
+
+
+@router.delete("/mcp/servers/{server_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_mcp_server(
+    server_id: str,
+    session: AsyncSession = Depends(get_session),
+    principal: Principal = Depends(require_role("org_admin", "platform_admin")),
+) -> Response:
+    item = await session.scalar(
+        select(MCPServer).where(
+            MCPServer.id == server_id,
+            MCPServer.tenant_id == principal.tenant_id,
+        )
+    )
+    if not item:
+        raise HTTPException(status_code=404, detail="MCP server not found")
+    await session.delete(item)
+    await session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/agent-approvals", response_model=list[AgentApprovalView])
+async def list_agent_approvals(
+    approval_status: str = Query(default="pending", alias="status", max_length=24),
+    session: AsyncSession = Depends(get_session),
+    principal: Principal = Depends(require_role("analyst", "org_admin", "platform_admin")),
+) -> list[AgentApprovalView]:
+    query = select(AgentApproval).where(
+        AgentApproval.tenant_id == principal.tenant_id,
+        AgentApproval.status == approval_status,
+    )
+    if principal.role == "analyst":
+        query = query.where(AgentApproval.requested_by == principal.user_id)
+    rows = list(await session.scalars(query.order_by(AgentApproval.created_at.desc())))
+    return [AgentApprovalView.model_validate(item, from_attributes=True) for item in rows]
+
+
+async def _decide_approval(
+    approval_id: str,
+    approved: bool,
+    payload: ApprovalDecision,
+    session: AsyncSession,
+    principal: Principal,
+) -> AgentApproval:
+    approval = await session.scalar(
+        select(AgentApproval).where(
+            AgentApproval.id == approval_id,
+            AgentApproval.tenant_id == principal.tenant_id,
+        )
+    )
+    if not approval:
+        raise HTTPException(status_code=404, detail="Approval not found")
+    if principal.role == "analyst" and approval.requested_by != principal.user_id:
+        raise HTTPException(status_code=404, detail="Approval not found")
+    if approval.status != "pending":
+        raise HTTPException(status_code=409, detail="Approval has already been decided")
+    if approval.expires_at and approval.expires_at <= datetime.now(UTC):
+        approval.status = "expired"
+        await session.commit()
+        raise HTTPException(status_code=409, detail="Approval has expired")
+    approval.status = "approved" if approved else "rejected"
+    approval.decided_by = principal.user_id
+    approval.decision_reason = payload.reason
+    approval.decided_at = datetime.now(UTC)
+    if approved and approval.tool_name == "report.export":
+        report_id = approval.request_payload.get("report_id")
+        report = await session.scalar(
+            select(Report).where(
+                Report.id == report_id,
+                Report.tenant_id == principal.tenant_id,
+            )
+        )
+        if not report:
+            raise HTTPException(status_code=422, detail="Approved report no longer exists")
+        export = ReportExport(
+            tenant_id=principal.tenant_id,
+            report_id=report.id,
+            format="pdf",
+            status="queued",
+            created_by=principal.user_id,
+        )
+        session.add(export)
+        await session.flush()
+        from scripts.worker import celery_app
+
+        task = celery_app.send_task(
+            "supplymind.reports.export_pdf", args=[export.id], queue="analysis"
+        )
+        export.celery_task_id = task.id
+    run = await session.scalar(
+        select(AnalysisRun).where(
+            AnalysisRun.id == approval.analysis_run_id,
+            AnalysisRun.tenant_id == principal.tenant_id,
+        )
+    )
+    await session.commit()
+    if run:
+        await append_event(
+            session,
+            run,
+            "approval_decided",
+            {
+                "approval_id": approval.id,
+                "approved": approved,
+                "tool": approval.tool_name,
+            },
+        )
+    return approval
+
+
+@router.post("/agent-approvals/{approval_id}/approve", response_model=AgentApprovalView)
+async def approve_agent_action(
+    approval_id: str,
+    payload: ApprovalDecision,
+    session: AsyncSession = Depends(get_session),
+    principal: Principal = Depends(require_role("analyst", "org_admin", "platform_admin")),
+) -> AgentApprovalView:
+    approval = await _decide_approval(approval_id, True, payload, session, principal)
+    return AgentApprovalView.model_validate(approval, from_attributes=True)
+
+
+@router.post("/agent-approvals/{approval_id}/reject", response_model=AgentApprovalView)
+async def reject_agent_action(
+    approval_id: str,
+    payload: ApprovalDecision,
+    session: AsyncSession = Depends(get_session),
+    principal: Principal = Depends(require_role("analyst", "org_admin", "platform_admin")),
+) -> AgentApprovalView:
+    approval = await _decide_approval(approval_id, False, payload, session, principal)
+    return AgentApprovalView.model_validate(approval, from_attributes=True)
 
 
 @router.get(
@@ -433,6 +855,62 @@ async def list_model_versions(
         )
     )
     return [ModelVersionView.model_validate(item, from_attributes=True) for item in models]
+
+
+@router.post(
+    "/ai/evaluations", response_model=EvaluationRunView, status_code=status.HTTP_202_ACCEPTED
+)
+async def create_evaluation_run(
+    payload: EvaluationRunCreate,
+    session: AsyncSession = Depends(get_session),
+    principal: Principal = Depends(require_role("platform_admin", "org_admin")),
+) -> EvaluationRunView:
+    version = await session.scalar(
+        select(DatasetVersion).where(
+            DatasetVersion.id == payload.dataset_version_id,
+            DatasetVersion.tenant_id == principal.tenant_id,
+            DatasetVersion.status == "approved",
+        )
+    )
+    model = None
+    if payload.model_version_id:
+        model = await session.scalar(
+            select(ModelVersion).where(
+                ModelVersion.id == payload.model_version_id,
+                ModelVersion.tenant_id == principal.tenant_id,
+            )
+        )
+    if not version or (payload.model_version_id and not model):
+        raise HTTPException(status_code=404, detail="Dataset version or model version not found")
+    evaluation = EvaluationRun(
+        tenant_id=principal.tenant_id,
+        dataset_version_id=version.id,
+        model_version_id=model.id if model else None,
+        created_by=principal.user_id,
+    )
+    session.add(evaluation)
+    await session.commit()
+    await session.refresh(evaluation)
+    from scripts.worker import celery_app
+
+    celery_app.send_task("supplymind.evaluations.run", args=[evaluation.id], queue="analysis")
+    return EvaluationRunView.model_validate(evaluation, from_attributes=True)
+
+
+@router.get("/ai/evaluations", response_model=list[EvaluationRunView])
+async def list_evaluation_runs(
+    session: AsyncSession = Depends(get_session),
+    principal: Principal = Depends(require_role("platform_admin", "org_admin")),
+) -> list[EvaluationRunView]:
+    rows = list(
+        await session.scalars(
+            select(EvaluationRun)
+            .where(EvaluationRun.tenant_id == principal.tenant_id)
+            .order_by(EvaluationRun.created_at.desc())
+            .limit(100)
+        )
+    )
+    return [EvaluationRunView.model_validate(item, from_attributes=True) for item in rows]
 
 
 @router.post(
@@ -1406,7 +1884,9 @@ async def _ensure_not_last_active_org_admin(
         return
     active_admins = int(
         await session.scalar(
-            select(func.count()).select_from(Membership).where(
+            select(func.count())
+            .select_from(Membership)
+            .where(
                 Membership.organization_id == organization_id,
                 Membership.role == "org_admin",
                 Membership.is_active.is_(True),
@@ -2076,7 +2556,9 @@ async def upload_document(
         if existing_document:
             chunk_count = (
                 await session.scalar(
-                    select(func.count(Chunk.id)).where(Chunk.document_id == existing_document.id)
+                    select(func.count(Chunk.id)).where(
+                        Chunk.document_id == existing_document.id, Chunk.level == "child"
+                    )
                 )
                 or 0
             )
@@ -2251,7 +2733,11 @@ async def upload_document(
     await session.commit()
     await session.refresh(document)
     chunk_count = (
-        await session.scalar(select(func.count(Chunk.id)).where(Chunk.document_id == document.id))
+        await session.scalar(
+            select(func.count(Chunk.id)).where(
+                Chunk.document_id == document.id, Chunk.level == "child"
+            )
+        )
         or 0
     )
     return DocumentView.model_validate(
@@ -2286,7 +2772,11 @@ async def update_document_metadata(
     )
     await session.commit()
     chunk_count = (
-        await session.scalar(select(func.count(Chunk.id)).where(Chunk.document_id == document.id))
+        await session.scalar(
+            select(func.count(Chunk.id)).where(
+                Chunk.document_id == document.id, Chunk.level == "child"
+            )
+        )
         or 0
     )
     return DocumentView.model_validate({**document.__dict__, "chunk_count": chunk_count})
@@ -2306,7 +2796,11 @@ async def get_document(
     if not document:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
     chunk_count = (
-        await session.scalar(select(func.count(Chunk.id)).where(Chunk.document_id == document.id))
+        await session.scalar(
+            select(func.count(Chunk.id)).where(
+                Chunk.document_id == document.id, Chunk.level == "child"
+            )
+        )
         or 0
     )
     return DocumentView.model_validate({**document.__dict__, "chunk_count": chunk_count})
@@ -2402,7 +2896,11 @@ async def rollback_document_version(
     )
     await session.commit()
     chunk_count = (
-        await session.scalar(select(func.count(Chunk.id)).where(Chunk.document_id == document.id))
+        await session.scalar(
+            select(func.count(Chunk.id)).where(
+                Chunk.document_id == document.id, Chunk.level == "child"
+            )
+        )
         or 0
     )
     return DocumentView.model_validate({**document.__dict__, "chunk_count": chunk_count})
@@ -2512,7 +3010,11 @@ async def archive_document(
     )
     await session.commit()
     chunk_count = (
-        await session.scalar(select(func.count(Chunk.id)).where(Chunk.document_id == document.id))
+        await session.scalar(
+            select(func.count(Chunk.id)).where(
+                Chunk.document_id == document.id, Chunk.level == "child"
+            )
+        )
         or 0
     )
     return DocumentView.model_validate({**document.__dict__, "chunk_count": chunk_count})
@@ -2852,7 +3354,13 @@ async def export_report_pdf(
         .order_by(ReportExport.created_at.desc())
     )
     if existing:
-        return existing
+        if existing.status != "completed" or export_asset_available(existing):
+            return existing
+        # A completed database row must not strand a report when its artifact
+        # was removed by local cleanup or object-storage retention.
+        existing.status = "failed"
+        existing.error_message = "Export artifact is no longer available"
+        existing.finished_at = datetime.now(UTC)
     export = ReportExport(
         tenant_id=principal.tenant_id, report_id=report.id, created_by=principal.user_id
     )
@@ -3120,7 +3628,9 @@ async def list_documents(
     for document in documents:
         count = (
             await session.scalar(
-                select(func.count(Chunk.id)).where(Chunk.document_id == document.id)
+                select(func.count(Chunk.id)).where(
+                    Chunk.document_id == document.id, Chunk.level == "child"
+                )
             )
             or 0
         )
@@ -3345,7 +3855,9 @@ async def cancel_data_source_sync_task(
         )
     )
     if not task:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Schema sync task not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Schema sync task not found"
+        )
     if task.status not in {"queued", "running"}:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前同步任务不可取消")
     if task.celery_task_id:
@@ -3641,13 +4153,12 @@ async def query_data_source(
     }
 
 
-@router.post("/analyses/stream")
-async def stream_analysis(
+async def _queue_analysis(
     payload: AnalysisRequest,
-    principal: Principal = Depends(require_role("analyst", "org_admin", "platform_admin")),
-    session: AsyncSession = Depends(get_session),
-    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
-) -> StreamingResponse:
+    principal: Principal,
+    session: AsyncSession,
+    idempotency_key: str | None,
+) -> AnalysisRun:
     if not payload.knowledge_base_id:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -3766,9 +4277,263 @@ async def stream_analysis(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="已达到组织每日分析配额，请明日再试",
         )
+    conversation = None
+    if payload.conversation_id:
+        conversation = await session.scalar(
+            select(Conversation).where(
+                Conversation.id == payload.conversation_id,
+                Conversation.tenant_id == principal.tenant_id,
+                Conversation.created_by == principal.user_id,
+            )
+        )
+    if conversation is None:
+        conversation = Conversation(
+            tenant_id=principal.tenant_id,
+            title=payload.question[:80],
+            created_by=principal.user_id,
+        )
+        session.add(conversation)
+        await session.flush()
+    session.add(
+        ConversationMessage(
+            tenant_id=principal.tenant_id,
+            conversation_id=conversation.id,
+            role="user",
+            content=payload.question,
+            metadata_json={
+                "data_source_id": payload.data_source_id,
+                "knowledge_base_id": payload.knowledge_base_id,
+            },
+        )
+    )
+    run = AnalysisRun(
+        tenant_id=principal.tenant_id,
+        conversation_id=conversation.id,
+        data_source_id=payload.data_source_id,
+        knowledge_base_id=payload.knowledge_base_id,
+        question=payload.question,
+        status="queued",
+        attempts=0,
+        idempotency_key=idempotency_key,
+        checkpoint_thread_id=f"{principal.tenant_id}:{principal.user_id}:{conversation.id}",
+        graph_version="enterprise-v2",
+    )
+    session.add(run)
+    await session.flush()
+    session.add(
+        create_outbox_event(
+            run,
+            "analysis.requested",
+            {"run_id": run.id, "conversation_id": conversation.id},
+        )
+    )
+    await append_event(
+        session,
+        run,
+        "queued",
+        {"run_id": run.id, "conversation_id": conversation.id},
+        commit=False,
+    )
+    await session.commit()
+    try:
+        from scripts.worker import celery_app
+
+        celery_app.send_task("supplymind.outbox.dispatch", queue="analysis")
+    except (OSError, RuntimeError):
+        # The committed Outbox row is retried by Celery Beat when the broker recovers.
+        pass
+    return run
+
+
+@router.post("/analyses", response_model=AnalysisAccepted, status_code=status.HTTP_202_ACCEPTED)
+async def create_analysis(
+    payload: AnalysisRequest,
+    principal: Principal = Depends(require_role("analyst", "org_admin", "platform_admin")),
+    session: AsyncSession = Depends(get_session),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> AnalysisAccepted:
+    run = await _queue_analysis(payload, principal, session, idempotency_key)
+    return AnalysisAccepted(
+        run_id=run.id,
+        conversation_id=run.conversation_id,
+        stream_url=f"/api/v1/analyses/{run.id}/stream",
+    )
+
+
+@router.post("/analyses/stream")
+async def stream_analysis(
+    payload: AnalysisRequest,
+    principal: Principal = Depends(require_role("analyst", "org_admin", "platform_admin")),
+    session: AsyncSession = Depends(get_session),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> StreamingResponse:
+    run = await _queue_analysis(payload, principal, session, idempotency_key)
     return StreamingResponse(
-        AnalysisService().stream(session, principal, payload, idempotency_key=idempotency_key),
+        stream_events(run.id, principal.tenant_id),
         media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@a2a_router.get("/.well-known/agent-card.json")
+async def a2a_agent_card() -> dict:
+    base = get_settings().a2a_public_base_url.rstrip("/")
+    return {
+        "name": "SupplyMind Supply Chain Analyst",
+        "description": "Tenant-scoped, evidence-grounded, read-only supply-chain analysis agent",
+        "url": f"{base}/a2a",
+        "protocolVersion": "1.0",
+        "version": "2.0.0",
+        "capabilities": {"streaming": True, "pushNotifications": False},
+        "securitySchemes": {"bearer": {"type": "http", "scheme": "bearer", "format": "JWT"}},
+        "security": [{"bearer": []}],
+        "defaultInputModes": ["text/plain", "application/json"],
+        "defaultOutputModes": ["text/plain", "application/json"],
+        "skills": [
+            {
+                "id": "supply-chain-analysis",
+                "name": "Read-only supply-chain analysis",
+                "description": "Analyze approved business data with guarded SQL and evidence citations",
+                "tags": ["supply-chain", "analytics", "sql", "read-only"],
+            },
+            {
+                "id": "knowledge-research",
+                "name": "Advanced RAG knowledge research",
+                "description": "Retrieve tenant knowledge using hybrid BM25 and vector search",
+                "tags": ["rag", "knowledge", "citations"],
+            },
+        ],
+    }
+
+
+def _a2a_error(request_id, code: int, message: str) -> dict:
+    return {"jsonrpc": "2.0", "id": request_id, "error": {"code": code, "message": message}}
+
+
+@a2a_router.post("/a2a")
+async def a2a_jsonrpc(
+    payload: dict = Body(...),
+    principal: Principal = Depends(require_role("analyst", "org_admin", "platform_admin")),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    request_id = payload.get("id")
+    method = payload.get("method")
+    params = payload.get("params") or {}
+    if method == "message/send":
+        message = params.get("message") or {}
+        parts = message.get("parts") or []
+        question = "\n".join(
+            str(part.get("text", "")) for part in parts if isinstance(part, dict)
+        ).strip()
+        metadata = {**(message.get("metadata") or {}), **(params.get("metadata") or {})}
+        if (
+            not question
+            or not metadata.get("data_source_id")
+            or not metadata.get("knowledge_base_id")
+        ):
+            return _a2a_error(
+                request_id,
+                -32602,
+                "text, data_source_id and knowledge_base_id are required",
+            )
+        request = AnalysisRequest(
+            question=question,
+            data_source_id=metadata["data_source_id"],
+            knowledge_base_id=metadata["knowledge_base_id"],
+            conversation_id=metadata.get("conversation_id"),
+        )
+        run = await _queue_analysis(
+            request,
+            principal,
+            session,
+            f"a2a:{message.get('messageId') or secrets.token_urlsafe(16)}",
+        )
+        task = A2ATask(
+            tenant_id=principal.tenant_id,
+            analysis_run_id=run.id,
+            context_id=message.get("contextId") or run.conversation_id,
+            status="submitted",
+            created_by=principal.user_id,
+        )
+        session.add(task)
+        await session.commit()
+        return {
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "result": {
+                "id": task.id,
+                "contextId": task.context_id,
+                "status": {"state": "submitted"},
+                "metadata": {
+                    "analysis_run_id": run.id,
+                    "stream_url": f"/a2a/tasks/{task.id}/stream",
+                },
+            },
+        }
+    if method in {"tasks/get", "tasks/cancel"}:
+        task = await session.scalar(
+            select(A2ATask).where(
+                A2ATask.id == params.get("id"),
+                A2ATask.tenant_id == principal.tenant_id,
+            )
+        )
+        if not task:
+            return _a2a_error(request_id, -32001, "Task not found")
+        run = await session.scalar(
+            select(AnalysisRun).where(
+                AnalysisRun.id == task.analysis_run_id,
+                AnalysisRun.tenant_id == principal.tenant_id,
+            )
+        )
+        if method == "tasks/cancel" and run and run.status in {"queued", "running"}:
+            run.status = "cancelled"
+            run.finished_at = datetime.now(UTC)
+            task.status = "cancelled"
+            await session.commit()
+            await append_event(session, run, "cancelled", {"run_id": run.id, "source": "a2a"})
+        state_map = {
+            "queued": "submitted",
+            "running": "working",
+            "completed": "completed",
+            "failed": "failed",
+            "cancelled": "canceled",
+        }
+        return {
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "result": {
+                "id": task.id,
+                "contextId": task.context_id,
+                "status": {"state": state_map.get(run.status if run else "failed", "failed")},
+                "artifacts": (
+                    [{"artifactId": run.id, "parts": [{"data": run.result or {}}]}]
+                    if run and run.status == "completed"
+                    else []
+                ),
+            },
+        }
+    return _a2a_error(request_id, -32601, "Method not found")
+
+
+@a2a_router.get("/a2a/tasks/{task_id}/stream")
+async def a2a_task_stream(
+    task_id: str,
+    last_event_id: int = Header(default=0, alias="Last-Event-ID", ge=0),
+    principal: Principal = Depends(get_principal),
+    session: AsyncSession = Depends(get_session),
+) -> StreamingResponse:
+    task = await session.scalar(
+        select(A2ATask).where(
+            A2ATask.id == task_id,
+            A2ATask.tenant_id == principal.tenant_id,
+        )
+    )
+    if not task:
+        raise HTTPException(status_code=404, detail="A2A task not found")
+    return StreamingResponse(
+        stream_events(task.analysis_run_id, principal.tenant_id, last_event_id),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 
@@ -3863,7 +4628,31 @@ async def get_analysis_events(
             AgentStepView.model_validate(step, from_attributes=True).model_dump(mode="json")
             for step in steps
         ],
+        "last_event_sequence": run.last_event_sequence,
+        "route": run.route,
     }
+
+
+@router.get("/analyses/{analysis_id}/stream")
+async def resume_analysis_stream(
+    analysis_id: str,
+    last_event_id: int = Header(default=0, alias="Last-Event-ID", ge=0),
+    principal: Principal = Depends(get_principal),
+    session: AsyncSession = Depends(get_session),
+) -> StreamingResponse:
+    run = await session.scalar(
+        select(AnalysisRun).where(
+            AnalysisRun.id == analysis_id,
+            AnalysisRun.tenant_id == principal.tenant_id,
+        )
+    )
+    if not run:
+        raise HTTPException(status_code=404, detail="Analysis run not found")
+    return StreamingResponse(
+        stream_events(run.id, principal.tenant_id, last_event_id),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.post("/analyses/{analysis_id}/retry")
@@ -3885,17 +4674,19 @@ async def retry_analysis(
         data_source_id=run.data_source_id,
         knowledge_base_id=run.knowledge_base_id,
         question=run.question,
+        conversation_id=run.conversation_id,
     )
     retry_key = f"retry:{run.id}:{secrets.token_urlsafe(12)}"
     await audit(
         session, principal.tenant_id, principal.user_id, "analysis.retried", "analysis_run", run.id
     )
+    retried = await _queue_analysis(request, principal, session, retry_key)
+    retried.retry_of_id = run.id
     await session.commit()
     return StreamingResponse(
-        AnalysisService().stream(
-            session, principal, request, idempotency_key=retry_key, retry_of_id=run.id
-        ),
+        stream_events(retried.id, principal.tenant_id),
         media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 
@@ -3926,6 +4717,12 @@ async def cancel_analysis(
         run.id,
     )
     await session.commit()
+    await append_event(
+        session,
+        run,
+        "cancelled",
+        {"run_id": run.id, "message": "分析已由用户取消"},
+    )
     return run
 
 
@@ -4088,7 +4885,9 @@ async def system_status(
             .limit(10)
         )
     )
-    failed_total = failed_ingestion + failed_refresh + failed_sync + failed_exports + failed_analyses
+    failed_total = (
+        failed_ingestion + failed_refresh + failed_sync + failed_exports + failed_analyses
+    )
     dependencies["worker"]["failed_tasks"] = str(failed_total)
     dependencies["worker"]["dead_letter_tasks"] = str(dead_letter)
     dependencies["worker"]["recent_errors"] = [

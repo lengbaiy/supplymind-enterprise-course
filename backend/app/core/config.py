@@ -6,6 +6,7 @@ DEVELOPMENT_JWT_SECRET = "development-only-change-me-please-change-me"
 # Valid Fernet material, deliberately all-zero so it is unmistakably a local-only
 # placeholder and cannot be mistaken for a deployable credential.
 DEVELOPMENT_CREDENTIAL_KEY = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+DEVELOPMENT_MCP_SERVICE_SECRET = "development-mcp-service-secret-change-me"
 
 
 class Settings(BaseSettings):
@@ -33,6 +34,34 @@ class Settings(BaseSettings):
     ai_max_graph_steps: int = 12
     ai_max_tool_calls: int = 8
     ai_answer_model: str | None = None
+    ai_router_model: str | None = None
+    ai_rerank_model: str | None = None
+    rerank_base_url: str | None = None
+    rerank_model: str | None = None
+    rerank_api_key: str | None = None
+    rag_multi_query_count: int = 3
+    rag_dense_top_k: int = 30
+    rag_bm25_top_k: int = 30
+    rag_fusion_top_k: int = 20
+    rag_rerank_top_k: int = 8
+    rag_rrf_k: int = 60
+    memory_enabled_default: bool = True
+    memory_confidence_threshold: float = 0.8
+    analysis_event_poll_seconds: float = 0.5
+    analysis_sse_heartbeat_seconds: int = 15
+    mcp_internal_url: str = "http://mcp-server:8001/mcp"
+    mcp_service_secret: str = DEVELOPMENT_MCP_SERVICE_SECRET
+    mcp_allowed_hosts: str = "mcp-server,localhost,127.0.0.1"
+    mcp_stdio_catalog_json: str = "{}"
+    a2a_public_base_url: str = "http://localhost:8000"
+    llm_gateway_url: str | None = None
+    otel_exporter_otlp_endpoint: str | None = None
+    eval_router_accuracy_min: float = 0.8
+    eval_sql_guard_accuracy_min: float = 1.0
+    eval_citation_precision_min: float = 0.8
+    eval_citation_recall_min: float = 0.8
+    eval_faithfulness_min: float = 0.75
+    eval_answer_relevance_min: float = 0.6
     oidc_issuer: str | None = None
     oidc_client_id: str | None = None
     oidc_client_secret: str | None = None
@@ -65,6 +94,14 @@ class Settings(BaseSettings):
     def is_development(self) -> bool:
         return self.env.lower() in {"development", "dev", "test"}
 
+    @property
+    def mcp_allowed_host_list(self) -> set[str]:
+        return {
+            value.strip().lower()
+            for value in self.mcp_allowed_hosts.split(",")
+            if value.strip()
+        }
+
     def validate_trial_runtime(self) -> None:
         """Reject a trial deployment that accidentally uses development secrets."""
         if self.env.lower() != "trial":
@@ -76,6 +113,8 @@ class Settings(BaseSettings):
             invalid.append("SUPPLYMIND_CREDENTIAL_KEY")
         if not self.s3_endpoint or not self.s3_access_key or not self.s3_secret_key:
             invalid.append("SUPPLYMIND_S3_ENDPOINT/S3_ACCESS_KEY/S3_SECRET_KEY")
+        if self.mcp_service_secret == DEVELOPMENT_MCP_SERVICE_SECRET:
+            invalid.append("SUPPLYMIND_MCP_SERVICE_SECRET")
         if invalid:
             raise ValueError("trial runtime configuration is unsafe: " + ", ".join(invalid))
 

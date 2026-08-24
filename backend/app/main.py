@@ -8,14 +8,14 @@ from fastapi.openapi.utils import get_openapi
 from sqlalchemy import select
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from app.api import router
+from app.api import a2a_router, router
 from app.core.config import get_settings
 from app.core.security import encrypt_secret, hash_password
 from app.db import SessionLocal, engine
 from app.models import Base, DataSource, Membership, Organization, User
 from app.modules.audit.router import router as audit_router
 from app.modules.dashboards.router import router as dashboards_router
-from app.observability import HTTP_REQUEST_DURATION, HTTP_REQUESTS
+from app.observability import HTTP_REQUEST_DURATION, HTTP_REQUESTS, configure_telemetry
 
 
 async def seed_demo_data() -> None:
@@ -286,6 +286,8 @@ async def seed_demo_data() -> None:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    from app.agents.runtime import runtime
+
     settings.validate_trial_runtime()
     # PostgreSQL schema is owned by Alembic; automatic metadata creation is only
     # retained for isolated SQLite development/test databases.
@@ -296,7 +298,9 @@ async def lifespan(_: FastAPI):
             await connection.run_sync(Base.metadata.create_all)
     if settings.is_development:
         await seed_demo_data()
+    await runtime.start()
     yield
+    await runtime.stop()
     await engine.dispose()
 
 
@@ -320,6 +324,11 @@ app = FastAPI(
     openapi_tags=OPENAPI_TAGS,
     lifespan=lifespan,
 )
+configure_telemetry("supplymind-api")
+if settings.otel_exporter_otlp_endpoint:
+    from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+
+    FastAPIInstrumentor.instrument_app(app, excluded_urls="/api/v1/health/live,/api/v1/metrics")
 
 
 class TraceIdMiddleware(BaseHTTPMiddleware):
@@ -403,5 +412,6 @@ async def metrics_middleware(request, call_next):
 
 
 app.include_router(router)
+app.include_router(a2a_router)
 app.include_router(audit_router)
 app.include_router(dashboards_router)

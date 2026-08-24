@@ -1,4 +1,5 @@
 import json
+from collections.abc import AsyncIterator
 
 import httpx
 from langchain_core.output_parsers import PydanticOutputParser
@@ -64,6 +65,160 @@ class OpenAICompatibleClient:
             return vectors
         except (KeyError, IndexError, TypeError, ValueError) as exc:
             raise ModelResponseError("Embedding model returned an invalid response") from exc
+
+    async def _chat_json(
+        self, prompt: str, *, model: str | None = None, temperature: float = 0
+    ) -> dict:
+        settings = get_settings()
+        base_url = settings.llm_gateway_url or settings.chat_base_url
+        if not base_url or not settings.chat_model or not settings.chat_api_key:
+            raise ModelConfigurationError(
+                "Chat model configuration is required before analysis can run"
+            )
+        async with httpx.AsyncClient(timeout=45) as client:
+            response = await client.post(
+                f"{base_url.rstrip('/')}/chat/completions",
+                headers={"Authorization": f"Bearer {settings.chat_api_key}"},
+                json={
+                    "model": model or settings.chat_model,
+                    "temperature": temperature,
+                    "response_format": {"type": "json_object"},
+                    "messages": [
+                        {"role": "system", "content": "Return valid JSON only."},
+                        {"role": "user", "content": prompt},
+                    ],
+                },
+            )
+        if response.status_code >= 400:
+            raise ModelResponseError("Chat model request failed")
+        try:
+            payload = json.loads(response.json()["choices"][0]["message"]["content"])
+            if not isinstance(payload, dict):
+                raise TypeError("JSON response must be an object")
+            return payload
+        except (KeyError, IndexError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            raise ModelResponseError("Chat model returned invalid JSON") from exc
+
+    async def optimize_retrieval_query(self, query: str, count: int = 3) -> dict:
+        payload = await self._chat_json(
+            "Optimize this enterprise supply-chain retrieval query. "
+            f"Return keys queries (exactly {count} short alternative queries) and "
+            "hypothetical_answer (a short HyDE passage; do not claim it is factual). "
+            f"Query: {query}",
+            model=get_settings().ai_router_model,
+        )
+        queries = payload.get("queries")
+        hypothetical = payload.get("hypothetical_answer")
+        if not isinstance(queries, list) or not all(isinstance(item, str) for item in queries):
+            raise ModelResponseError("Query optimizer returned invalid queries")
+        if hypothetical is not None and not isinstance(hypothetical, str):
+            raise ModelResponseError("Query optimizer returned invalid HyDE text")
+        return {"queries": queries[:count], "hypothetical_answer": hypothetical or ""}
+
+    async def route_question(self, question: str) -> tuple[str, float]:
+        payload = await self._chat_json(
+            "Classify the request into data, knowledge, hybrid, or unsupported. "
+            "Data needs database facts; knowledge needs policy/definition evidence; hybrid needs both. "
+            f"Return route and confidence (0..1). Request: {question}",
+            model=get_settings().ai_router_model,
+        )
+        route = payload.get("route")
+        confidence = payload.get("confidence")
+        if route not in {"data", "knowledge", "hybrid", "unsupported"}:
+            raise ModelResponseError("Router returned an invalid route")
+        if not isinstance(confidence, (int, float)):
+            raise ModelResponseError("Router returned an invalid confidence")
+        return route, min(1.0, max(0.0, float(confidence)))
+
+    async def rerank(self, query: str, candidates: list[dict], limit: int) -> list[str]:
+        settings = get_settings()
+        if not candidates:
+            return []
+        if settings.rerank_base_url and settings.rerank_model and settings.rerank_api_key:
+            async with httpx.AsyncClient(timeout=30) as client:
+                response = await client.post(
+                    f"{settings.rerank_base_url.rstrip('/')}/rerank",
+                    headers={"Authorization": f"Bearer {settings.rerank_api_key}"},
+                    json={
+                        "model": settings.rerank_model,
+                        "query": query,
+                        "documents": [item["text"] for item in candidates],
+                        "top_n": limit,
+                    },
+                )
+            if response.status_code >= 400:
+                raise ModelResponseError("Rerank model request failed")
+            try:
+                indexes = [item["index"] for item in response.json()["results"]]
+                return [candidates[index]["chunk_id"] for index in indexes[:limit]]
+            except (KeyError, IndexError, TypeError, ValueError) as exc:
+                raise ModelResponseError("Rerank model returned invalid results") from exc
+        payload = await self._chat_json(
+            "Rank the evidence by relevance. Return ordered_chunk_ids only. "
+            f"Query: {query}\nCandidates: "
+            + json.dumps(
+                [
+                    {"chunk_id": item["chunk_id"], "text": item["text"][:1200]}
+                    for item in candidates
+                ],
+                ensure_ascii=False,
+            ),
+            model=settings.ai_rerank_model or settings.ai_answer_model,
+        )
+        ordered = payload.get("ordered_chunk_ids")
+        allowed = {item["chunk_id"] for item in candidates}
+        if not isinstance(ordered, list):
+            raise ModelResponseError("LLM reranker returned invalid results")
+        return [item for item in ordered if isinstance(item, str) and item in allowed][:limit]
+
+    async def extract_memories(self, question: str, answer: str) -> list[dict]:
+        payload = await self._chat_json(
+            "Extract only durable user preferences from this conversation. "
+            "Allowed categories: communication, kpi_interest, factory_scope, product_line, "
+            "time_range, role_context. Never extract credentials, personal identifiers, raw data, "
+            "or temporary analysis facts. Return memories as objects with category, memory_key, "
+            "content, confidence. Return an empty list when there is no durable preference. "
+            f"User: {question}\nAssistant: {answer[:4000]}",
+            model=get_settings().ai_router_model,
+        )
+        memories = payload.get("memories", [])
+        if not isinstance(memories, list):
+            raise ModelResponseError("Memory extractor returned invalid results")
+        return [item for item in memories if isinstance(item, dict)]
+
+    async def stream_text(self, prompt: str, *, model: str | None = None) -> AsyncIterator[str]:
+        settings = get_settings()
+        base_url = settings.llm_gateway_url or settings.chat_base_url
+        if not base_url or not settings.chat_model or not settings.chat_api_key:
+            raise ModelConfigurationError(
+                "Chat model configuration is required before analysis can run"
+            )
+        async with httpx.AsyncClient(timeout=60) as client:
+            async with client.stream(
+                "POST",
+                f"{base_url.rstrip('/')}/chat/completions",
+                headers={"Authorization": f"Bearer {settings.chat_api_key}"},
+                json={
+                    "model": model or settings.ai_answer_model or settings.chat_model,
+                    "temperature": 0,
+                    "stream": True,
+                    "messages": [{"role": "user", "content": prompt}],
+                },
+            ) as response:
+                if response.status_code >= 400:
+                    raise ModelResponseError("Streaming model request failed")
+                async for line in response.aiter_lines():
+                    if not line.startswith("data:"):
+                        continue
+                    data = line[5:].strip()
+                    if data == "[DONE]":
+                        break
+                    try:
+                        token = json.loads(data)["choices"][0]["delta"].get("content")
+                    except (KeyError, IndexError, TypeError, ValueError, json.JSONDecodeError):
+                        continue
+                    if token:
+                        yield token
 
     async def plan_sql(
         self,

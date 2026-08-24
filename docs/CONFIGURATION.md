@@ -13,13 +13,13 @@ docker compose up -d --build
 
 打开 `http://localhost:5173`，使用 `admin@demo.local`、`ChangeMe123!`、组织 `demo-factory` 登录。
 
-不配置 Chat 和 Embedding 密钥时，平台、登录、数据源、报告列表和课程大部分功能仍可运行；真实 AI 分析、文档 Embedding 和 RAG 检索会明确失败并显示 Trace ID，不会返回模拟结论。
+不配置 Chat 和 Embedding 密钥时，平台、登录、数据源和报告列表仍可运行；真实分析、Embedding 和 RAG 检索会明确失败并显示 Trace ID，不会返回模拟结论。
 
 ## 必须自己设置的密钥
 
 在 `.env` 中修改以下字段：
 
-| 变量 | 用途 | 本地课堂 | 试运行/生产 |
+| 变量 | 用途 | 本地开发 | 试运行/生产 |
 | --- | --- | --- | --- |
 | `SUPPLYMIND_JWT_SECRET` | JWT 签名密钥 | 建议替换 | 必须替换 |
 | `SUPPLYMIND_CREDENTIAL_KEY` | 数据源密码加密密钥，Fernet 格式 | 建议替换 | 必须替换 |
@@ -76,6 +76,53 @@ SUPPLYMIND_EMBEDDING_DIMENSION=1024
 
 `SUPPLYMIND_EMBEDDING_DIMENSION` 必须和模型实际输出维度一致。维度不一致会导致向量写入或检索失败。
 
+## 企业 Agent 配置
+
+默认 Compose 会启动 API、Worker、Celery Beat 和独立 MCP Server。MCP 内置工具地址为
+`http://mcp-server:8001/mcp`，业务 Worker 仅通过这个地址访问 Schema、只读 SQL、检索、图表和导出申请。
+
+| 变量 | 用途 | 安全要求 |
+| --- | --- | --- |
+| `SUPPLYMIND_MCP_SERVICE_SECRET` | 签发 MCP 短期租户令牌 | 试运行和生产必须独立随机生成 |
+| `SUPPLYMIND_MCP_ALLOWED_HOSTS` | 外部 Streamable HTTP MCP 主机白名单 | 只填经批准的域名或内部服务名 |
+| `SUPPLYMIND_MCP_STDIO_CATALOG_JSON` | stdio MCP 静态目录 | 只能由部署人员维护，不接受浏览器传入命令 |
+| `SUPPLYMIND_RERANK_*` | 可选专用重排接口 | 为空时回退 LLM 重排，再回退 RRF |
+| `SUPPLYMIND_OTEL_EXPORTER_OTLP_ENDPOINT` | GenAI Trace OTLP HTTP 地址 | 例如 `http://otel-collector:4318/v1/traces` |
+
+长期记忆默认开启，可在控制台“Agent 平台”中由用户关闭、查看或删除。服务端只接受预定义的偏好类别，并拒绝凭据和明显敏感信息。
+
+## Compose Profiles
+
+基础启动使用 `docker compose up -d --build`。需要模型网关时启动：
+
+```powershell
+docker compose --profile enterprise-ai up -d
+```
+
+在 `.env` 配置上游模型后，将 API 的 `SUPPLYMIND_CHAT_BASE_URL` 和
+`SUPPLYMIND_EMBEDDING_BASE_URL` 设置为 `http://litellm:4000/v1`，模型名分别设为
+`planner`、`answer`、`router` 或 `embedding`，API Key 设为 `LITELLM_MASTER_KEY`。
+
+需要 Trace、Phoenix、Prometheus 和 Grafana 时启动：
+
+```powershell
+docker compose --profile observability up -d
+```
+
+同时设置 `SUPPLYMIND_OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318/v1/traces`。
+Phoenix 在 `http://localhost:6006`，Prometheus 在 `http://localhost:9090`，Grafana 在
+`http://localhost:3000`。生产应锁定镜像版本并将密码改为 Secret。
+
+## 评测配置
+
+`POST /api/v1/ai/evaluations` 会对已批准数据集版本创建异步评测。Router、SQL Guard、
+Citation Precision/Recall、Faithfulness 与 Answer Relevance 的门槛由 `.env` 中的
+`SUPPLYMIND_EVAL_*` 控制。提交代码前可运行：
+
+```powershell
+docker compose exec -T api python -m scripts.evaluation_gate
+```
+
 ## 对象存储配置
 
 本地 Docker Compose 默认启动 MinIO：
@@ -87,7 +134,7 @@ SUPPLYMIND_S3_ACCESS_KEY=supplymind
 SUPPLYMIND_S3_SECRET_KEY=change-this-in-production
 ```
 
-本地课堂可以使用默认值。试运行和生产必须替换为企业对象存储或独立 MinIO 的真实凭据。
+本地开发可以使用默认值。试运行和生产必须替换为企业对象存储或独立 MinIO 的真实凭据。
 
 ## OIDC 单点登录配置
 
@@ -116,7 +163,7 @@ SUPPLYMIND_DATASOURCE_ALLOWED_HOSTS=localhost,127.0.0.1,demo-postgres,demo-mysql
 SUPPLYMIND_DATASOURCE_ALLOWED_CIDRS=127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
 ```
 
-课堂演示使用 Compose 网络内的 `demo-postgres` 和 `demo-mysql`。企业环境应只允许经过审批的数据库主机或网段，并且只使用只读账号。
+本地演示使用 Compose 网络内的 `demo-postgres` 和 `demo-mysql`。企业环境应只允许经过审批的数据库主机或网段，并且只使用只读账号。
 
 ## 试运行配置
 
@@ -130,9 +177,9 @@ Copy-Item .env.trial.example .env.trial
 
 ## 密钥安全规则
 
-- 不提交 `.env`、`.env.trial`、截图里的密钥或课程录屏里的密钥。
-- 不把真实密钥写到 README、课件、Issue、Commit message 或聊天记录。
-- 学员只能使用个人或课堂专用密钥，不能共用生产密钥。
+- 不提交 `.env`、`.env.trial`、截图里的密钥或运行日志中的密钥。
+- 不把真实密钥写到 README、Issue、Commit message 或聊天记录。
+- 开发密钥与生产密钥必须分离，禁止共用生产密钥。
 - 密钥疑似泄露后，立即在模型服务、对象存储和身份提供商中轮换。
 - 生产环境优先使用 Kubernetes Secret、云厂商 Secret Manager 或企业密钥管理系统。
 

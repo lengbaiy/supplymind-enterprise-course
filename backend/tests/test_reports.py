@@ -1,4 +1,5 @@
-from app.models import AnalysisRun
+from app.api import export_asset_available
+from app.models import AnalysisRun, ReportExport
 from app.services.reports import render_markdown, render_pdf
 
 
@@ -27,3 +28,19 @@ def test_render_pdf_creates_pdf(tmp_path) -> None:
     destination = tmp_path / "report.pdf"
     render_pdf("# 月度报告\n\n## 结论\n\n完成", str(destination))
     assert destination.read_bytes().startswith(b"%PDF")
+
+
+def test_completed_export_requires_an_available_local_asset(tmp_path) -> None:
+    export = ReportExport(
+        tenant_id="tenant-1",
+        report_id="report-1",
+        created_by="user-1",
+        storage_backend="local",
+        file_path=str(tmp_path / "missing.pdf"),
+    )
+    assert not export_asset_available(export)
+
+    artifact = tmp_path / "ready.pdf"
+    artifact.write_bytes(b"%PDF")
+    export.file_path = str(artifact)
+    assert export_asset_available(export)
