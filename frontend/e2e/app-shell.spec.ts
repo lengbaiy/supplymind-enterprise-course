@@ -208,7 +208,7 @@ test("analysis history opens inside a contained session window", async ({ page }
   await expect(sessionWindow).toBeVisible();
   await expect(sessionWindow.getByText("运行 ID：")).toBeVisible();
   await expect(sessionWindow.locator(".step-timeline")).toBeVisible();
-  await sessionWindow.getByRole("button", { name: "新建分析" }).click();
+  await page.locator(".analysis-session-floating-actions").getByRole("button", { name: "新建会话" }).click();
   await expect(sessionWindow).toBeHidden();
   await expect(page.getByLabel("分析问题")).toBeFocused();
 });
@@ -224,6 +224,9 @@ test("administrator can inspect the enterprise agent control plane", async ({ pa
   await expect(page).toHaveURL(/\/agent-platform$/);
   await expect(page.getByRole("heading", { name: "Agent 平台" })).toBeVisible();
   await expect(page.getByRole("tab", { name: "运行观测" })).toBeVisible();
+  await page.getByRole("tab", { name: "自进化" }).click();
+  await expect(page.getByText("Hermes Evolution Loop")).toBeVisible();
+  await expect(page.getByText("自进化护栏")).toBeVisible();
   await page.getByRole("tab", { name: "长期记忆" }).click();
   await expect(page.getByText("用户级长期记忆")).toBeVisible();
   await page.getByRole("tab", { name: "MCP 工具" }).click();

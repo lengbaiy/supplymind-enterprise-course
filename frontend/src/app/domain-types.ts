@@ -62,3 +62,13 @@ export type AuditEventView = AuditEvent;
 export type UserMemory = { id: string; category: string; memory_key: string; content: string; confidence: number; source_run_id?: string; version: number; expires_at?: string; created_at: string; updated_at: string };
 export type MCPServer = { id: string; name: string; transport: "streamable_http" | "stdio"; endpoint?: string; stdio_catalog_key?: string; enabled: boolean; status: string; discovered_tools: { name: string; description?: string }[]; last_checked_at?: string; error_message?: string; created_at: string };
 export type AgentApproval = { id: string; analysis_run_id: string; tool_name: string; side_effect: string; status: string; request_payload: Record<string, unknown>; requested_by: string; decided_by?: string; decision_reason?: string; expires_at?: string; decided_at?: string; created_at: string };
+export type HermesRuntime = {
+  framework: "Hermes";
+  mode: "guarded_self_evolution";
+  version: string;
+  status: "learning" | "watching" | "blocked";
+  signals: { id: string; label: string; value: number; unit: string; status: "healthy" | "watch" | "blocked" }[];
+  candidates: { id: string; title: string; target: "prompt" | "retrieval" | "tool" | "policy" | "memory"; reason: string; gate: string; status: "candidate" | "evaluating" | "needs_approval" | "adoptable" }[];
+  safeguards: string[];
+  updated_at: string;
+};

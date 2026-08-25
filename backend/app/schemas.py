@@ -428,6 +428,34 @@ class FineTuneJobView(BaseModel):
     created_at: datetime
 
 
+class HermesEvolutionSignal(BaseModel):
+    id: str
+    label: str
+    value: float
+    unit: str = ""
+    status: Literal["healthy", "watch", "blocked"]
+
+
+class HermesEvolutionCandidate(BaseModel):
+    id: str
+    title: str
+    target: Literal["prompt", "retrieval", "tool", "policy", "memory"]
+    reason: str
+    gate: str
+    status: Literal["candidate", "evaluating", "needs_approval", "adoptable"]
+
+
+class HermesRuntimeView(BaseModel):
+    framework: Literal["Hermes"] = "Hermes"
+    mode: Literal["guarded_self_evolution"] = "guarded_self_evolution"
+    version: str = "2026.08"
+    status: Literal["learning", "watching", "blocked"]
+    signals: list[HermesEvolutionSignal]
+    candidates: list[HermesEvolutionCandidate]
+    safeguards: list[str]
+    updated_at: datetime
+
+
 class AnalysisView(BaseModel):
     id: str
     status: str

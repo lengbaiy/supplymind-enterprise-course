@@ -9,6 +9,8 @@ SupplyMind 是一个面向制造业供应链场景的多租户、只读 Agent �
 - 只读数据源：PostgreSQL/MySQL 连接测试、Schema 同步、表白名单、连接状态。
 - SQL 安全：只允许单条 `SELECT` 或 `WITH`，禁止写操作、多语句、危险函数和越权表。
 - 多 Agent 运行时：LangGraph `TypedDict + Annotated` 状态流，Handoffs、结构化 Router、并行 `Send` Subagents、条件回退和事实校验。
+- Hermes 外层框架：前端根组件、工作区 Shell、分析会话与 Agent 控制台统一接入 Hermes 编排边界。
+- AI 自进化闭环：按“运行信号 → 候选改进 → 自动评测 → 安全门禁 → 人工采纳”管理提示词、检索、工具、策略和记忆演进。
 - Advanced RAG：父子分块、Multi-Query、HyDE、Dense、PostgreSQL BM25、RRF、Rerank、父文档上下文和来源定位。
 - 长短期记忆：PostgreSQL Checkpointer 支持会话恢复；用户级长期记忆带类别白名单、置信度、版本、过期和自助控制。
 - MCP 与 A2A：独立标准 MCP Server、Streamable HTTP/受控 stdio Client、工具 RBAC、审批；只读 A2A Agent Card、任务与流式结果接口。

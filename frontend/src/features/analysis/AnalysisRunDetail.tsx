@@ -12,7 +12,6 @@ type Props = {
   knowledgeBases: KnowledgeBase[];
   busy: boolean;
   onClose: () => void;
-  onStartNew: () => void;
   onCancel: (id: string) => void;
   onRetry: (id: string) => void;
 };
@@ -23,7 +22,6 @@ export function AnalysisRunDetail({
   knowledgeBases,
   busy,
   onClose,
-  onStartNew,
   onCancel,
   onRetry,
 }: Props) {
@@ -39,9 +37,6 @@ export function AnalysisRunDetail({
           <p className="panel-meta">运行状态：{run.status}</p>
         </div>
         <div className="analysis-run-actions">
-          <button className="secondary-button" onClick={onStartNew}>
-            新建分析
-          </button>
           <button
             className="text-button analysis-session-close"
             onClick={onClose}

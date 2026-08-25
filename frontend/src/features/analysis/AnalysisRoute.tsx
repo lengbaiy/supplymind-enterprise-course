@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import * as Dialog from "@radix-ui/react-dialog";
+import { Plus } from "lucide-react";
 import { AppShell } from "../../components/AppShell";
 import { API_BASE, apiRequest } from "../../services/api";
 import { readSseResponse, type SseEvent } from "../../services/sse";
@@ -237,6 +238,17 @@ export function AnalysisRoute() {
       .catch((cause) =>
         setError(cause instanceof Error ? cause.message : "分析重试失败"),
       );
+  const startNewSession = useCallback(() => {
+    setSelectedRun(null);
+    setSteps([]);
+    setError("");
+    setStream(freshSnapshot());
+    setQuestion("");
+    window.setTimeout(
+      () => document.getElementById("analysis-question")?.focus(),
+      0,
+    );
+  }, []);
   return (
     <AppShell
       nav="分析会话"
@@ -279,36 +291,53 @@ export function AnalysisRoute() {
         navigate("/");
       }}
     >
-      <div className="analysis-workspace-layout">
-        <aside className="analysis-history-pane">
-          <AnalysisHistory
-            runs={runs}
-            selectedId={selectedRun?.id}
-            onOpen={(id) => void openRun(id)}
-          />
-        </aside>
-        <div className="analysis-workspace-main">
-          <AnalysisPanel
-            question={question}
-            setQuestion={setQuestion}
-            loading={busy}
-            onSubmit={submit}
-            sources={sources}
-            knowledgeBases={knowledgeBases}
-            sourceId={sourceId}
-            knowledgeBaseId={knowledgeBaseId}
-            setSourceId={setSourceId}
-            setKnowledgeBaseId={setKnowledgeBaseId}
-            stages={stream.stages}
-            activity={stream.activity}
-            citationCount={stream.citationCount}
-            rowCount={stream.rowCount}
-            chartReady={stream.chartReady}
-            error={error || stream.error}
-            result={stream.result}
-          />
+      <section className="hermes-analysis-frame" aria-label="Hermes 分析框架">
+        <div className="hermes-frame-header">
+          <div>
+            <p className="section-kicker">HERMES / SESSION ORCHESTRATION</p>
+            <h3>Hermes 会话框架</h3>
+            <p>从同一个外层框架管理新建分析、实时运行与历史追溯。</p>
+          </div>
+          <button
+            className="primary-button hermes-new-session"
+            onClick={startNewSession}
+            type="button"
+          >
+            <Plus size={15} aria-hidden="true" />
+            新建会话
+          </button>
         </div>
-      </div>
+        <div className="analysis-workspace-layout">
+          <aside className="analysis-history-pane">
+            <AnalysisHistory
+              runs={runs}
+              selectedId={selectedRun?.id}
+              onOpen={(id) => void openRun(id)}
+            />
+          </aside>
+          <div className="analysis-workspace-main">
+            <AnalysisPanel
+              question={question}
+              setQuestion={setQuestion}
+              loading={busy}
+              onSubmit={submit}
+              sources={sources}
+              knowledgeBases={knowledgeBases}
+              sourceId={sourceId}
+              knowledgeBaseId={knowledgeBaseId}
+              setSourceId={setSourceId}
+              setKnowledgeBaseId={setKnowledgeBaseId}
+              stages={stream.stages}
+              activity={stream.activity}
+              citationCount={stream.citationCount}
+              rowCount={stream.rowCount}
+              chartReady={stream.chartReady}
+              error={error || stream.error}
+              result={stream.result}
+            />
+          </div>
+        </div>
+      </section>
       {selectedRun && (
         <Dialog.Root
           open
@@ -321,6 +350,16 @@ export function AnalysisRoute() {
               aria-describedby={undefined}
             >
               <Dialog.Title className="sr-only">分析会话详情</Dialog.Title>
+              <div className="analysis-session-floating-actions">
+                <button
+                  className="primary-button hermes-new-session"
+                  onClick={startNewSession}
+                  type="button"
+                >
+                  <Plus size={15} aria-hidden="true" />
+                  新建会话
+                </button>
+              </div>
               <AnalysisRunDetail
                 run={selectedRun}
                 steps={steps}
@@ -328,13 +367,6 @@ export function AnalysisRoute() {
                 knowledgeBases={knowledgeBases}
                 busy={busy}
                 onClose={() => setSelectedRun(null)}
-                onStartNew={() => {
-                  setSelectedRun(null);
-                  window.setTimeout(
-                    () => document.getElementById("analysis-question")?.focus(),
-                    0,
-                  );
-                }}
                 onCancel={cancel}
                 onRetry={retry}
               />

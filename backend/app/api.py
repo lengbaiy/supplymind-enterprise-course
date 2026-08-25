@@ -108,6 +108,9 @@ from app.schemas import (
     EvaluationRunView,
     FineTuneJobCreate,
     FineTuneJobView,
+    HermesEvolutionCandidate,
+    HermesEvolutionSignal,
+    HermesRuntimeView,
     IngestionTaskView,
     KnowledgeBaseCreate,
     KnowledgeBaseUpdate,
@@ -910,6 +913,133 @@ async def list_evaluation_runs(
         )
     )
     return [EvaluationRunView.model_validate(item, from_attributes=True) for item in rows]
+
+
+@router.get("/hermes/runtime", response_model=HermesRuntimeView)
+async def get_hermes_runtime(
+    session: AsyncSession = Depends(get_session),
+    principal: Principal = Depends(get_principal),
+) -> HermesRuntimeView:
+    total_runs = int(
+        await session.scalar(
+            select(func.count(AnalysisRun.id)).where(
+                AnalysisRun.tenant_id == principal.tenant_id,
+            )
+        )
+        or 0
+    )
+    failed_runs = int(
+        await session.scalar(
+            select(func.count(AnalysisRun.id)).where(
+                AnalysisRun.tenant_id == principal.tenant_id,
+                AnalysisRun.status == "failed",
+            )
+        )
+        or 0
+    )
+    pending_approvals = int(
+        await session.scalar(
+            select(func.count(AgentApproval.id)).where(
+                AgentApproval.tenant_id == principal.tenant_id,
+                AgentApproval.status == "pending",
+            )
+        )
+        or 0
+    )
+    memories = int(
+        await session.scalar(
+            select(func.count(UserMemory.id)).where(
+                UserMemory.tenant_id == principal.tenant_id,
+                UserMemory.user_id == principal.user_id,
+            )
+        )
+        or 0
+    )
+    evaluations = int(
+        await session.scalar(
+            select(func.count(EvaluationRun.id)).where(
+                EvaluationRun.tenant_id == principal.tenant_id,
+            )
+        )
+        or 0
+    )
+    failed_rate = round(failed_runs / total_runs * 100, 1) if total_runs else 0.0
+    signals = [
+        HermesEvolutionSignal(
+            id="analysis_failure_rate",
+            label="分析失败率",
+            value=failed_rate,
+            unit="%",
+            status="blocked" if failed_rate >= 25 else "watch" if failed_rate else "healthy",
+        ),
+        HermesEvolutionSignal(
+            id="memory_signals",
+            label="个人化记忆",
+            value=float(memories),
+            unit="条",
+            status="healthy" if memories else "watch",
+        ),
+        HermesEvolutionSignal(
+            id="evaluation_runs",
+            label="评测门禁",
+            value=float(evaluations),
+            unit="次",
+            status="healthy" if evaluations else "watch",
+        ),
+        HermesEvolutionSignal(
+            id="approval_queue",
+            label="待审批改动",
+            value=float(pending_approvals),
+            unit="项",
+            status="watch" if pending_approvals else "healthy",
+        ),
+    ]
+    candidates = [
+        HermesEvolutionCandidate(
+            id="retrieval-evidence-tightening",
+            title="收紧 RAG 证据引用阈值",
+            target="retrieval",
+            reason="根据历史回答的引用完整性，优先优化检索召回与引用覆盖。",
+            gate="离线评测通过，引用完整性不得下降。",
+            status="candidate" if evaluations == 0 else "adoptable",
+        ),
+        HermesEvolutionCandidate(
+            id="memory-personalization-bootstrap",
+            title="启动用户级偏好学习",
+            target="memory",
+            reason="把用户常问 KPI、工厂范围和时间窗口作为可撤销长期记忆。",
+            gate="敏感信息过滤通过，且用户记忆开关保持开启。",
+            status="candidate" if memories == 0 else "adoptable",
+        ),
+    ]
+    if failed_runs:
+        candidates.insert(
+            0,
+            HermesEvolutionCandidate(
+                id="sql-guard-repair-loop",
+                title="失败分析的 SQL Guard 修复循环",
+                target="prompt",
+                reason="历史运行存在失败，需要把 Guard 拒绝原因回灌到提示词候选。",
+                gate="只能生成候选提示词，必须经过评测和人工审批后采用。",
+                status="needs_approval" if pending_approvals else "candidate",
+            ),
+        )
+    return HermesRuntimeView(
+        status="blocked"
+        if any(signal.status == "blocked" for signal in signals)
+        else "learning"
+        if any(signal.status == "watch" for signal in signals)
+        else "watching",
+        signals=signals,
+        candidates=candidates,
+        safeguards=[
+            "候选改进默认不自动上线",
+            "训练数据先脱敏再进入评测集",
+            "SQL 与工具调用继续走 RBAC、审批和审计",
+            "评测门禁失败时保持当前生产配置",
+        ],
+        updated_at=datetime.now(UTC),
+    )
 
 
 @router.post(

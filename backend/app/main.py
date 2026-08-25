@@ -311,6 +311,7 @@ OPENAPI_TAGS = [
     {"name": "数据源", "description": "数据源连接、Schema 同步、白名单和只读查询。"},
     {"name": "知识库", "description": "知识库、文档摄取、分类、向量化和检索。"},
     {"name": "分析会话", "description": "分析运行、SSE 事件、SQL Guard、重试和取消。"},
+    {"name": "Hermes 框架", "description": "外层 Agent 编排、自进化信号、候选改进和安全门禁。"},
     {"name": "报告中心", "description": "报告正文、PDF 导出、对象存储和下载。"},
     {"name": "供应链大屏", "description": "五类供应链指标、趋势、排行和刷新。"},
     {"name": "系统状态", "description": "健康检查、依赖状态和指标。"},
@@ -357,6 +358,8 @@ def _api_tag(path: str) -> str:
         return "知识库"
     if path.startswith("/api/v1/analyses"):
         return "分析会话"
+    if path.startswith("/api/v1/hermes"):
+        return "Hermes 框架"
     if path.startswith("/api/v1/reports"):
         return "报告中心"
     if path.startswith("/api/v1/dashboards"):
