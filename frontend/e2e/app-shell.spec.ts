@@ -207,10 +207,9 @@ test("analysis history opens inside a contained session window", async ({ page }
   const sessionWindow = page.locator(".analysis-session-window");
   await expect(sessionWindow).toBeVisible();
   await expect(sessionWindow.getByText("运行 ID：")).toBeVisible();
+  await expect(sessionWindow.getByText(/运行状态：(已完成|运行中|排队中|失败|已取消|已拒绝|等待审批)/)).toBeVisible();
   await expect(sessionWindow.locator(".step-timeline")).toBeVisible();
-  await page.locator(".analysis-session-floating-actions").getByRole("button", { name: "新建会话" }).click();
-  await expect(sessionWindow).toBeHidden();
-  await expect(page.getByLabel("分析问题")).toBeFocused();
+  await expect(sessionWindow.getByRole("button", { name: "新建会话" })).toHaveCount(0);
 });
 
 test("administrator can inspect the enterprise agent control plane", async ({ page }) => {

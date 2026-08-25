@@ -15,6 +15,44 @@ type Props = {
   onCancel: (id: string) => void;
   onRetry: (id: string) => void;
 };
+
+const STEP_LABELS: Record<string, string> = {
+  answer_agent: "生成回答",
+  answer_verifier: "校验答案",
+  approval_gate: "审批确认",
+  chart: "生成图表",
+  complete: "完成分析",
+  context_loader: "加载上下文",
+  data_analysis: "数据分析",
+  insight: "生成洞察",
+  knowledge_research: "检索知识库",
+  query: "执行查询",
+  rag: "检索指标定义",
+  report: "生成报告",
+  router: "识别问题类型",
+  schema: "读取数据结构",
+  sql_guard: "校验 SQL 安全",
+  sql_planner: "生成 SQL",
+  synthesis_agent: "汇总答案",
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  archived: "已归档",
+  cancelled: "已取消",
+  completed: "已完成",
+  failed: "失败",
+  processing: "处理中",
+  queued: "排队中",
+  rejected: "已拒绝",
+  running: "运行中",
+  waiting_approval: "等待审批",
+};
+
+const formatStepName = (name: string) =>
+  STEP_LABELS[name] || name.replace(/_/g, " ");
+
+const formatStatus = (status: string) => STATUS_LABELS[status] || status;
+
 export function AnalysisRunDetail({
   run,
   steps,
@@ -34,7 +72,7 @@ export function AnalysisRunDetail({
       <div className="panel-heading">
         <div>
           <h3>{run.question}</h3>
-          <p className="panel-meta">运行状态：{run.status}</p>
+          <p className="panel-meta">运行状态：{formatStatus(run.status)}</p>
         </div>
         <div className="analysis-run-actions">
           <button
@@ -103,10 +141,10 @@ export function AnalysisRunDetail({
           {steps.length ? steps.map((step) => (
             <article className="step-item" key={step.id}>
               <span className={`status-dot-label ${step.status}`}>
-                {step.status}
+                {formatStatus(step.status)}
               </span>
               <div>
-                <strong>{step.name}</strong>
+                <strong>{formatStepName(step.name)}</strong>
                 <p>{step.input_summary}</p>
                 {step.error_message && <small>{step.error_message}</small>}
               </div>

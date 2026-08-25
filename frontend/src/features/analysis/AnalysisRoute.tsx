@@ -350,16 +350,6 @@ export function AnalysisRoute() {
               aria-describedby={undefined}
             >
               <Dialog.Title className="sr-only">分析会话详情</Dialog.Title>
-              <div className="analysis-session-floating-actions">
-                <button
-                  className="primary-button hermes-new-session"
-                  onClick={startNewSession}
-                  type="button"
-                >
-                  <Plus size={15} aria-hidden="true" />
-                  新建会话
-                </button>
-              </div>
               <AnalysisRunDetail
                 run={selectedRun}
                 steps={steps}
