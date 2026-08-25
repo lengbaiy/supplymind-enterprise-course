@@ -1,0 +1,30 @@
+<h1>SupplyMind 项目演示与验收指南</h1>
+<blockquote><p>本页用于面试演示、内部验收和部署交接。演示顺序遵循“先健康、再业务、后治理”，每一步都能落到一个页面、接口、日志或测试文件。</p></blockquote>
+<h2>1. 演示前环境检查</h2>
+<h3>1.1 基础服务</h3>
+<pre lang="powershell"><code>docker compose ps<br/>docker compose exec -T api alembic upgrade head<br/>Invoke-RestMethod http://localhost:8000/api/v1/health/live<br/>Invoke-RestMethod http://localhost:8000/api/v1/health/ready</code></pre>
+<h3>1.2 依赖检查</h3>
+<ul><li>PostgreSQL 与 pgvector 可连接。</li><li>Redis 可读写，Worker 和 Beat 在线。</li><li>MinIO bucket 可写入，MCP Server 健康。</li><li>模型与 Embedding 配置存在，但密钥不出后端。</li></ul>
+<h2>2. 五分钟演示脚本</h2>
+<h3>2.1 登录与组织切换</h3><p>使用演示账号登录，展示当前组织、角色和资源范围。切换组织后，数据源、知识库、报告和审计列表都应按 tenant_id 变化。</p>
+<h3>2.2 Hermes 外层框架</h3><p>进入分析会话，先展示顶部 Hermes 版本胶囊和页面内 Hermes 会话框架。点击历史会话后，详情在独立窗口打开；再点击外层工具条的“新建会话”，确认能回到输入框并开始新的分析。</p>
+<h3>2.3 配置只读数据源</h3><p>创建 PostgreSQL 或 MySQL 数据源，执行连接测试和 Schema 同步，只勾选演示表白名单。强调密码由后端加密保存，前端只看到状态和元数据。</p>
+<h3>2.4 发起供应链分析</h3><p>输入“分析本月供应商交付延误，并结合供应商准入规则解释原因”。页面展示 Router 选择 hybrid，随后出现 SQL、RAG 来源、验证和报告事件。</p>
+<h3>2.5 展示报告与 Trace</h3><p>打开报告详情，展示来源版本、Trace ID、受控 SQL、处理状态和导出 PDF。用 Trace ID 反查审计记录，说明一次请求如何贯穿 API、Agent、工具和 Worker。</p>
+<h3>2.6 展示 AI 安全自进化</h3><p>进入 Agent 平台的“自进化”标签页，展示 Hermes Evolution Loop、分析失败率、个人化记忆、评测门禁、审批队列、候选改进和自进化护栏。强调候选不会自动上线，必须通过评测与人工采纳。</p>
+<h2>3. 十五分钟深度演示</h2>
+<h3>3.1 SQL Guard 拒绝路径</h3><p>提交包含 UPDATE、DROP、多语句或白名单外表的请求，展示系统拒绝原因、审计事件和前端可读提示。</p>
+<h3>3.2 RAG 来源定位</h3><p>上传供应商制度文档，等待版本入库，提问制度相关问题，打开引用块检查 checksum、版本号、父文档和来源位置。</p>
+<h3>3.3 SSE 断线恢复</h3><p>分析进行中刷新或断开网络，重新进入任务页面，确认 Last-Event-ID 之后的事件可补发，任务不会重复执行。</p>
+<h3>3.4 异步 PDF 导出</h3><p>提交 PDF 导出，展示 pending、running、completed 状态。下载时切换组织或修改报告 ID，验证授权校验仍然生效。</p>
+<h2>4. 验收矩阵</h2>
+<table><thead><tr><th>场景</th><th>操作</th><th>通过标准</th><th>证据</th></tr></thead><tbody><tr><td>健康</td><td>访问 live/ready</td><td>返回健康状态</td><td>health API</td></tr><tr><td>Hermes</td><td>访问 Agent 平台自进化</td><td>展示 runtime 信号、候选和护栏</td><td><code>/api/v1/hermes/runtime</code></td></tr><tr><td>隔离</td><td>切换组织访问报告</td><td>跨组织返回 404</td><td>API 响应与审计</td></tr><tr><td>只读</td><td>提交违规 SQL</td><td>Guard 拒绝</td><td>Guard 日志</td></tr><tr><td>检索</td><td>查询制度文档</td><td>返回引用版本</td><td>来源块</td></tr><tr><td>恢复</td><td>中断 SSE</td><td>事件可续传</td><td>Last-Event-ID</td></tr><tr><td>交付</td><td>导出并下载 PDF</td><td>状态完整且授权通过</td><td>报告记录</td></tr></tbody></table>
+<h2>5. 常见失败演示</h2>
+<h3>5.1 Worker 离线</h3><p>任务保持 pending 时检查 Worker 容器、Redis 队列和 Watchdog 心跳，不要直接刷新数据库状态。</p>
+<h3>5.2 Embedding 不可用</h3><p>知识版本应进入 failed 并显示明确原因，不能用空向量或静态答案伪装成功。</p>
+<h3>5.3 MCP 主机不在白名单</h3><p>调用应在 registry 或 policy 层被拒绝，并保留审计事件。</p>
+<h2>6. 演示话术</h2>
+<h3>6.1 项目一句话</h3><p>SupplyMind 是面向制造业供应链组织的多租户只读 AI 分析平台，把真实数据、企业知识、受控工具、Hermes 外层编排、安全自进化候选和可审计报告串成一条完整链路。</p>
+<h3>6.2 架构图讲解</h3><p>先讲边界：浏览器只访问 API；再讲编排：Router 决定数据、知识或混合路径；最后讲治理：SQL Guard、租户校验、审批、审计和 Trace 贯穿全链路。</p>
+<h2>7. 验收命令</h2>
+<pre lang="powershell"><code>docker compose config --quiet<br/>docker compose exec -T api pytest -q<br/>npm --prefix frontend run build<br/>npm --prefix frontend run test:e2e<br/>helm lint infra/helm/supplymind<br/>helm template supplymind infra/helm/supplymind</code></pre>

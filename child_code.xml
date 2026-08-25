@@ -1,0 +1,33 @@
+<h1>SupplyMind 项目代码导航</h1>
+<blockquote><p>按“入口 → 编排 → 领域服务 → 基础设施 → 测试”的顺序阅读代码，能够从一个 API 请求追踪到数据库、队列、MCP 和前端事件流。</p></blockquote>
+<h2>1. 仓库目录</h2>
+<table><thead><tr><th>目录</th><th>阅读重点</th></tr></thead><tbody><tr><td><code>backend/app</code></td><td>FastAPI、领域模块、Agent、RAG、MCP、Hermes runtime、观测</td></tr><tr><td><code>backend/tests</code></td><td>安全、租户、Agent、RAG、MCP、Hermes 和任务行为</td></tr><tr><td><code>frontend/src</code></td><td>Hermes Provider、路由、领域页面、API、SSE、图表</td></tr><tr><td><code>infra</code></td><td>Compose profile、Prometheus、Grafana、Helm</td></tr><tr><td><code>docs</code></td><td>架构、API、配置、交付和回滚说明</td></tr></tbody></table>
+<h2>2. 一个分析请求的调用链</h2>
+<h3>2.1 HTTP 入口</h3><p>从 <code>backend/app/api.py</code> 和 analysis router 开始，确认认证依赖、组织上下文、幂等键和 Trace ID 如何进入服务层。</p>
+<h3>2.2 领域服务</h3><p>继续进入 <code>backend/app/modules/analysis/service.py</code>，观察任务创建、资源校验、事件持久化和 Agent runtime 调用。</p>
+<h3>2.3 Agent 编排</h3><p><code>backend/app/agents/graph.py</code> 定义节点和边，<code>runtime.py</code> 负责运行配置，<code>state.py</code> 定义状态，<code>middleware.py</code> 处理动态提示词和记忆。</p>
+<h3>2.4 Hermes Runtime</h3><p><code>GET /api/v1/hermes/runtime</code> 聚合分析失败率、个人化记忆、评测门禁和审批队列，返回自进化候选与安全护栏。前端 <code>AgentPlatformRoute.tsx</code> 的“自进化”标签页消费该接口。</p>
+<h3>2.5 数据与事件</h3><p>结果写入 PostgreSQL，事件发布到 Redis，Worker 负责异步导出或刷新，前端通过 <code>frontend/src/services/sse.ts</code> 接收。</p>
+<h2>3. 安全边界代码</h2>
+<h3>3.1 SQL Guard</h3><p>阅读 <code>backend/app/core/sql_guard.py</code>，重点看语句类型、表白名单、危险函数、超时和行数限制。</p>
+<h3>3.2 租户依赖</h3><p>阅读 <code>backend/app/modules/tenancy/dependencies.py</code> 和 identity 模块，确认 JWT 组织上下文如何进入 repository。</p>
+<h3>3.3 MCP 安全</h3><p>阅读 <code>backend/app/mcp_runtime/security.py</code>、<code>client.py</code>，关注 token、host allowlist、工具权限和审计。</p>
+<h2>4. RAG 与知识库代码</h2>
+<h3>4.1 入库</h3><p>从 knowledge、ingestion 和 embedding 相关服务开始，追踪文档版本、checksum、父子分块和失败状态。</p>
+<h3>4.2 检索</h3><p>阅读 <code>backend/app/rag/retrieval.py</code> 与 <code>ranking.py</code>，理解 Dense、BM25、RRF 和 rerank 的组合顺序。</p>
+<h2>5. 报告与任务代码</h2>
+<h3>5.1 Report service</h3><p>关注 Markdown 生成、PDF 导出任务、MinIO/S3 对象键和下载授权校验。</p>
+<h3>5.2 Watchdog 与 Outbox</h3><p>阅读 task watchdog、events 和 worker 脚本，理解心跳、重试、取消、死信和幂等。</p>
+<h2>6. 前端导航</h2>
+<h3>6.1 Hermes 外层入口</h3><p><code>frontend/src/app/App.tsx</code> 用 <code>HermesProvider</code> 包住整个应用，<code>AppShell.tsx</code> 显示 Hermes 版本，<code>AnalysisRoute.tsx</code> 将历史、实时运行和新建会话包在 Hermes 会话框架里。</p>
+<h3>6.2 路由与页面</h3><p><code>frontend/src/app/route-registry.ts</code> 定义页面入口，features 目录按业务域组织。</p>
+<h3>6.3 API 与 SSE</h3><p><code>services/api.ts</code> 统一请求和错误，<code>services/sse.ts</code> 负责事件解析、重连和 Last-Event-ID。</p>
+<h3>6.4 图表与状态</h3><p>dashboard 使用 charts 服务将供应链聚合结果映射为可视化，页面只消费领域类型，不持有后端密钥。</p>
+<h2>7. 常用调试命令</h2>
+<pre lang="powershell"><code>rg "Trace|tenant_id|SQLGuard|Last-Event-ID" backend frontend
+docker compose logs -f api worker mcp-server
+docker compose exec -T api pytest -q backend/tests/test_agent_graph.py
+docker compose exec -T api pytest -q backend/tests/test_retrieval.py
+npm --prefix frontend run test:e2e</code></pre>
+<h2>8. 代码阅读检查点</h2>
+<ol><li>能说清楚一次请求的入口、状态、工具、数据库和事件。</li><li>能定位 SQL Guard 和租户隔离的实际文件。</li><li>能解释 Hermes 为什么是外层治理框架，而不是替代 LangGraph 的执行图。</li><li>能解释 Worker 为什么不放在 API 进程中。</li><li>能用测试文件证明关键行为，而不是只看实现。</li></ol>

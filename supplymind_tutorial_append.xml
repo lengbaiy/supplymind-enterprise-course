@@ -1,0 +1,156 @@
+<h1>十一、SupplyMind 技术栈教程与部署发散</h1>
+<blockquote><p>本章参考“常考”课件的讲解方式，但所有示例、接口和部署命令均以 SupplyMind 当前仓库为准。每节依次回答：技术解决什么问题、项目中落在哪里、如何部署、面试如何发散。</p></blockquote>
+
+<h2>1. Python 3.12 与 FastAPI 服务</h2>
+<h3>1.1 为什么选择 FastAPI</h3>
+<p>SupplyMind 的后端需要同时承载 REST API、SSE 流式分析、健康检查和后台任务提交。FastAPI 基于类型注解生成 OpenAPI 契约，结合 Pydantic 校验请求边界，适合把认证、租户、数据源和分析模块拆成独立路由。</p>
+<h3>1.2 项目代码落点</h3>
+<p><code>backend/app/main.py</code> 负责应用启动，<code>backend/app/api.py</code> 组织版本化路由，领域逻辑位于 <code>backend/app/modules</code>，公共依赖位于 <code>backend/app/dependencies.py</code>。所有业务接口统一挂在 <code>/api/v1</code>，并返回 <code>X-Trace-ID</code>。</p>
+<h3>1.3 本地启动与生产启动</h3>
+<pre lang="powershell"><code>Copy-Item .env.example .env
+docker compose up -d --build
+Invoke-RestMethod http://localhost:8000/api/v1/health/live
+Invoke-RestMethod http://localhost:8000/api/v1/health/ready</code></pre>
+<p>生产环境通过反向代理终止 TLS，API 容器只暴露内网端口；Worker、Beat 和 MCP Server 使用独立进程，避免把长任务阻塞在 Web 进程中。</p>
+<h3>1.4 常考发散</h3>
+<p>面试可从 ASGI 与 WSGI、依赖注入生命周期、同步函数在线程池中的行为、Pydantic v2 校验、OpenAPI 版本兼容和优雅停机展开。重点说明：SSE 连接不能依赖单进程内存保存状态，必须由数据库和 Redis 支撑恢复。</p>
+
+<h2>2. React、TypeScript 与 Vite 前端</h2>
+<h3>2.1 前端职责边界</h3>
+<p>前端负责组织切换、数据源配置、知识库、分析流、报告、仪表盘、审计和系统状态展示，不保存数据库密钥，也不直接连接业务数据库。领域路由和导航分别集中在 <code>frontend/src/app/route-registry.ts</code> 与 <code>frontend/src/app/navigation.ts</code>。</p>
+<h3>2.2 API 与 SSE 客户端</h3>
+<p><code>frontend/src/services/api.ts</code> 统一处理认证和错误，<code>frontend/src/services/sse.ts</code> 解析事件、记录 Last-Event-ID 并在断线后恢复。页面组件只消费领域类型，避免把后端 DTO 直接散落在视图中。</p>
+<h3>2.3 Hermes 外层框架</h3>
+<p><code>frontend/src/app/hermes.tsx</code> 在 React 根组件外层提供 Hermes 框架上下文，<code>frontend/src/components/AppShell.tsx</code> 在工作区顶栏展示 Hermes 版本与能力边界。分析会话页通过 <code>Hermes 会话框架</code> 将新建会话、历史记录、实时运行和详情窗口放到统一外层编排下，避免用户进入历史详情后找不到新建入口。</p>
+<h3>2.4 构建与部署</h3>
+<pre lang="powershell"><code>npm --prefix frontend install
+npm --prefix frontend run build
+npm --prefix frontend run test
+npm --prefix frontend run test:e2e</code></pre>
+<p>构建产物由 Nginx 或同类静态服务器托管，API 地址通过构建时配置或反向代理注入；不要把模型 API Key 编译进前端 bundle。</p>
+<h3>2.5 常考发散</h3>
+<p>可发散到 React 状态边界、路由懒加载、SSE 与 WebSocket 的选择、浏览器重连退避、前端错误归因、Playwright 稳定性和跨域 Cookie 策略。</p>
+
+<h2>3. PostgreSQL、pgvector 与 Alembic</h2>
+<h3>3.1 关系库在项目中的角色</h3>
+<p>PostgreSQL 同时保存组织与成员、数据源元数据、分析任务、事件、报告记录、知识库版本、审计和 LangGraph checkpoint。pgvector 用于 Dense Embedding，BM25 则承担关键词召回，两者在 RAG 层融合。</p>
+<h3>3.2 多租户与事务边界</h3>
+<p>服务层从 JWT 取得 <code>tenant_id</code>，查询时再次校验资源所属组织；跨组织资源统一返回 404。写任务采用事务 Outbox，确保数据库状态与异步事件发布不会出现“已提交但未通知”的半成功。</p>
+<h3>3.3 迁移与部署</h3>
+<pre lang="powershell"><code>docker compose exec -T api alembic upgrade head
+docker compose exec -T api pytest -q backend/tests/test_organization.py backend/tests/test_knowledge.py</code></pre>
+<p>生产升级先备份 PostgreSQL，再执行向前兼容迁移；回滚优先回滚应用镜像，只有确认数据兼容时才执行 Alembic downgrade。</p>
+<h3>3.4 常考发散</h3>
+<p>重点准备 MVCC、索引选择、连接池、慢查询、向量距离、HNSW/IVFFlat、迁移锁表风险、读写分离和 RLS 与服务层双重隔离的取舍。</p>
+
+<h2>4. Redis、Celery 与可恢复任务</h2>
+<h3>4.1 Redis 的用途</h3>
+<p>Redis 在 SupplyMind 中承担事件分发、任务队列协作和短期缓存，不作为唯一事实来源。分析事件先写 PostgreSQL，再发布 Redis；客户端断线后由数据库补发未确认事件。</p>
+<h3>4.2 Celery Worker 与 Beat</h3>
+<p>同步 API 只负责创建任务和返回状态，PDF 导出、知识入库、数据源同步和仪表盘刷新交给 Worker。Beat 触发周期任务，Watchdog 负责心跳、超时、取消和死信处理。</p>
+<h3>4.3 部署方式</h3>
+<pre lang="powershell"><code>docker compose up -d api worker beat redis
+docker compose logs -f worker
+docker compose exec -T api pytest -q backend/tests/test_task_watchdog.py backend/tests/test_outbox_dispatch.py</code></pre>
+<h3>4.4 常考发散</h3>
+<p>可展开消息至少一次投递、幂等键、重试退避、死信队列、任务取消的协作式语义、Redis 持久化、Broker 与 Backend 分离，以及为什么不能只依赖 Celery 内存状态。</p>
+
+<h2>5. LangGraph Agent Runtime</h2>
+<h3>5.1 状态图设计</h3>
+<p><code>backend/app/agents/state.py</code> 定义问题、租户、数据源、知识库、检索证据、SQL 草案、工具调用、验证结论和事件等状态。Reducer 保证并行 Subagent 合并时不会覆盖彼此结果。</p>
+<h3>5.2 Router、Handoff 与 Subagent</h3>
+<p>Router 将请求分类为 data、knowledge、hybrid 或 unsupported；hybrid 通过 Send 并行运行数据与知识子图；Handoff 在步骤之间转移控制权，最终由验证节点统一收敛。</p>
+<h3>5.3 调试与部署</h3>
+<p>本地先运行 Agent 单测，再在 Compose 的 enterprise-ai profile 中配置 OpenAI-compatible 模型网关。模型不可用时必须返回明确错误，不能用静态答案伪装成功。</p>
+<h3>5.4 常考发散</h3>
+<p>准备 StateGraph 与普通函数编排的差异、checkpoint 与 replay、并行状态合并、工具调用循环上限、模型幻觉防护、人工审批节点和成本/延迟治理。</p>
+
+<h2>5A. Hermes 框架与 AI 自进化闭环</h2>
+<h3>5A.1 Hermes 在项目中的定位</h3>
+<p>Hermes 不是替换 LangGraph 的新 Agent，而是包在业务系统外层的编排框架：前端负责统一入口和可视化，后端负责聚合运行信号、候选改进和安全门禁。它把分析会话、Agent 控制台、长期记忆、MCP 工具、评测任务和人工审批放在同一个治理边界里。</p>
+<h3>5A.2 代码落点</h3>
+<p>前端入口是 <code>frontend/src/app/hermes.tsx</code>、<code>frontend/src/app/App.tsx</code>、<code>frontend/src/features/analysis/AnalysisRoute.tsx</code> 和 <code>frontend/src/features/agents/AgentPlatformRoute.tsx</code>。后端入口是 <code>GET /api/v1/hermes/runtime</code>，定义在 <code>backend/app/api.py</code>，响应模型位于 <code>backend/app/schemas.py</code>，OpenAPI 分类位于 <code>backend/app/main.py</code>。</p>
+<h3>5A.3 自进化不是自动改生产</h3>
+<p>项目采用安全自进化闭环：运行信号先形成候选改进，候选改进进入离线评测，评测通过后再走人工审批，最后才允许采纳。候选对象包括 prompt、retrieval、tool、policy 和 memory；生产配置不会因为模型自己判断“更好”就自动替换。</p>
+<h3>5A.4 当前可展示的自进化信号</h3>
+<ul><li>分析失败率：用于触发 SQL Guard 修复循环或提示词候选。</li><li>个人化记忆：用于学习用户关注 KPI、工厂范围、产品线和时间窗口。</li><li>评测门禁：用于判断候选改进是否可进入 adoptable 状态。</li><li>审批队列：用于显示仍需人工确认的工具、副作用或策略变更。</li></ul>
+<h3>5A.5 演示与验收</h3>
+<pre lang="powershell"><code>$login = Invoke-RestMethod http://localhost:8000/api/v1/auth/login -Method Post -ContentType 'application/json' -Body (@{email='admin@demo.local';password='ChangeMe123!';organization_slug='demo-factory'} | ConvertTo-Json)
+Invoke-RestMethod http://localhost:8000/api/v1/hermes/runtime -Headers @{Authorization="Bearer $($login.access_token)"}</code></pre>
+<p>前端验收路径：登录后进入 <code>Agent 平台 → 自进化</code>，确认 Hermes Evolution Loop、信号卡片、候选改进和自进化护栏可见；进入 <code>分析会话</code>，确认外层 Hermes 会话框架和新建会话按钮可用。</p>
+<h3>5A.6 面试发散</h3>
+<p>回答“AI 自进化”时不要说系统会无限制修改自己，而要强调可控闭环：候选生成、沙箱评测、回归测试、人审采纳、审计回滚。真正的工程价值是让系统从历史失败、用户偏好和评测结果中发现改进方向，同时保持生产边界稳定。</p>
+
+<h2>6. Advanced RAG 与 pgvector 检索</h2>
+<h3>6.1 入库链路</h3>
+<p>知识文档经过分类、版本登记、父子分块、Embedding 和索引写入。checksum 使同一版本可追踪，Embedding 失败必须显式失败，禁止写入假向量。</p>
+<h3>6.2 检索链路</h3>
+<p>查询阶段组合 Multi-Query、HyDE、Dense、BM25、RRF、重排序和父文档上下文映射。最终引用必须携带文档版本、来源块和检索 Trace，供报告和审计回读。</p>
+<h3>6.3 部署与评测</h3>
+<p>部署时同时检查 PostgreSQL pgvector 扩展、Embedding 模型连通性和知识库初始化脚本；用 <code>backend/tests/test_advanced_rag.py</code>、<code>backend/tests/test_retrieval.py</code> 验证召回和失败路径。</p>
+<h3>6.4 常考发散</h3>
+<p>可发散召回率与精确率、chunk size、父子索引、RRF 权重、reranker 延迟、缓存失效、长上下文排序、离线评测集和“检索不到就明确失败”的产品边界。</p>
+
+<h2>7. MCP、A2A 与工具治理</h2>
+<h3>7.1 MCP Server 结构</h3>
+<p><code>backend/app/mcp</code> 和 <code>backend/app/mcp_runtime</code> 负责工具注册、客户端连接、租户令牌和安全策略。工具覆盖 Schema、只读 SQL、检索、图表和报告导出申请。</p>
+<h3>7.2 传输与白名单</h3>
+<p>Streamable HTTP MCP 主机必须来自运维白名单；stdio MCP 使用固定目录，浏览器不得传入任意命令。工具请求依次经过 RBAC、租户校验、Schema 校验、审批和审计。</p>
+<h3>7.3 部署与排障</h3>
+<p>Compose 中独立启动 MCP Server，先用健康检查验证协议，再执行 <code>backend/tests/test_mcp_protocol.py</code> 与 <code>backend/tests/test_mcp_registry.py</code>。连接失败时区分网络、协议、权限和工具参数错误。</p>
+<h3>7.4 常考发散</h3>
+<p>准备 MCP 与传统 REST、函数调用、A2A 的边界；工具幂等性；审批超时；最小权限；工具结果注入提示词的安全风险；以及为什么浏览器不能持有数据库凭据。</p>
+
+<h2>8. MinIO/S3 报告交付</h2>
+<h3>8.1 报告生命周期</h3>
+<p>分析结果先形成 Markdown，再由 Worker 异步导出 PDF，产物写入 MinIO 或兼容 S3。下载接口重新校验租户、报告归属和导出记录，完成的 PDF 作为不可变产物保留。</p>
+<h3>8.2 部署配置</h3>
+<pre lang="powershell"><code>docker compose up -d minio
+docker compose logs -f minio
+docker compose exec -T api pytest -q backend/tests/test_reports.py</code></pre>
+<p>生产使用独立 bucket、服务账号和最小权限策略；通过生命周期规则清理临时文件，但不得删除仍被报告记录引用的对象。</p>
+<h3>8.3 常考发散</h3>
+<p>可发散对象存储与文件系统、预签名 URL、内容寻址、PDF 字体、断点上传、病毒扫描、加密、生命周期和跨区域复制。</p>
+
+<h2>9. Docker Compose、Helm 与 Kubernetes</h2>
+<h3>9.1 Compose 本地编排</h3>
+<p>基础 profile 启动 API、Worker、Beat、PostgreSQL、Redis、MinIO、MCP 和前端；enterprise-ai profile 增加模型网关；observability profile 增加 Phoenix、OTLP、Prometheus 和 Grafana。</p>
+<h3>9.2 Kubernetes 对应关系</h3>
+<p><code>infra/helm/supplymind</code> 将 API、Worker、前端、Ingress、HPA 和 ConfigMap 参数化。数据库、对象存储和模型凭据通过 Secret 或外部托管服务注入，业务逻辑不写入 Helm 模板。</p>
+<h3>9.3 发布与回滚</h3>
+<pre lang="powershell"><code>docker compose config --quiet
+helm lint infra/helm/supplymind
+helm template supplymind infra/helm/supplymind
+docker compose --profile observability up -d</code></pre>
+<p>发布前验证镜像、迁移、健康检查和就绪探针；回滚先停止新版本写入，再恢复镜像和兼容配置，禁止直接删除数据卷。</p>
+<h3>9.4 常考发散</h3>
+<p>准备 Deployment 与 StatefulSet、Service 与 Ingress、ConfigMap 与 Secret、HPA 指标、滚动发布、PodDisruptionBudget、资源 requests/limits 和 Compose 到 Kubernetes 的映射。</p>
+
+<h2>10. OpenTelemetry、Prometheus、Grafana 与 Phoenix</h2>
+<h3>10.1 可观测数据链路</h3>
+<p>请求从 API 生成 Trace ID，跨 Agent、MCP、数据库和 Worker 传播；OTLP 输出 Trace，Prometheus 抓取指标，Grafana 展示系统健康，Phoenix 辅助分析 LLM 调用链。</p>
+<h3>10.2 部署与验收</h3>
+<p>启用 observability profile 后检查 API、Worker、OTLP Collector、Prometheus、Grafana 和 Phoenix 的健康状态；故障排查先按 Trace ID 关联日志、任务、审计和工具调用。</p>
+<h3>10.3 常考发散</h3>
+<p>可发散指标、日志、Trace 的关系，采样率，Cardinality，SLO/SLI，敏感字段脱敏，LLM token 成本指标，以及异步任务如何保持 trace parent。</p>
+
+<h2>11. 测试、质量门禁与上线清单</h2>
+<h3>11.1 后端与前端验证</h3>
+<pre lang="powershell"><code>docker compose exec -T api pytest -q
+npm --prefix frontend run build
+npm --prefix frontend test
+npm --prefix frontend run test:e2e</code></pre>
+<h3>11.2 安全与数据边界</h3>
+<p>检查 API Key 不进入前端和仓库，SQL Guard 拒绝写入与越权表，跨组织资源返回 404，MCP 主机来自白名单，报告下载重新鉴权。</p>
+<h3>11.3 Hermes 验证点</h3>
+<p>后端 smoke test 需要覆盖 <code>/api/v1/hermes/runtime</code>，前端 E2E 需要覆盖分析历史详情外层新建会话，以及 Agent 平台自进化 Tab。截图建议保存 <code>hermes-analysis-frame-desktop.png</code>、<code>hermes-evolution-desktop.png</code> 和 <code>hermes-evolution-mobile.png</code>。</p>
+<h3>11.4 面试复盘模板</h3>
+<p>每个技术点都按“为什么选、替代方案、项目代码、故障场景、部署方式、监控指标、回滚策略”七步回答；避免只背框架名而不能解释数据流和失败边界。</p>
+
+<h2>12. 技术栈之间的整体串联</h2>
+<h3>12.1 一次分析请求的完整链路</h3>
+<p>Hermes 外层框架承接用户入口，React 发起请求，FastAPI 建立租户上下文，LangGraph Router 选择子图，RAG 或 MCP 提供证据，SQL Guard 执行只读查询，PostgreSQL 保存状态，Redis/Celery 驱动异步事件，SSE 推送进度，报告写入 MinIO，OTLP/Prometheus/Grafana 记录可观测数据。运行结果再被 Hermes runtime 聚合为自进化信号和候选改进。</p>
+<h3>12.2 故障定位顺序</h3>
+<p>先看健康检查，再用 X-Trace-ID 查 API 与 Agent，再查任务状态和 Redis 事件，随后定位数据库、Embedding、MCP 或对象存储，最后检查前端 SSE 重连。每层都应返回可操作的错误原因。</p>
+<h3>12.3 部署决策总结</h3>
+<p>单机演示优先 Compose；多人测试增加 TLS、独立数据库和对象存储；生产环境使用 Helm/Kubernetes、托管 PostgreSQL/Redis/S3、外部 Secret、完整观测和可回滚迁移。</p>

@@ -1,0 +1,21 @@
+<h1>十四、项目入口与白板图示解读</h1>
+<callout emoji="💡" background-color="light-blue" border-color="blue"><p>建议学习顺序：先看项目演示与验收，再看代码导航；准备面试时看简历模板和八股题；深入架构时对照本页 12 张白板。</p></callout>
+<h2>1. 子页面入口</h2>
+<ul><li><a type="url-preview" href="https://tcnfdlkiyaci.feishu.cn/docx/TotcdK296oHkm4xeAsYcSd5nnmd">项目演示与验收指南</a></li><li><a type="url-preview" href="https://tcnfdlkiyaci.feishu.cn/docx/XF6jdalTsovhAvxKCc7c905Mncb">项目代码导航</a></li><li><a type="url-preview" href="https://tcnfdlkiyaci.feishu.cn/docx/S9ysdBmeYoxtI9xyCIFc1iemnbc">项目简历模板</a></li><li><a type="url-preview" href="https://tcnfdlkiyaci.feishu.cn/docx/QCFEdrkjioLUBSx7np2cbeMDnLe">项目八股与面试题</a></li></ul>
+<h2>2. 白板讲解顺序</h2>
+<h3>2.1 平台分层架构</h3><p>先讲浏览器、API、Agent、MCP、数据源和观测边界，强调密钥和租户边界不进入前端。</p>
+<h3>2.2 部署拓扑</h3><p>说明 API、Worker、Beat、PostgreSQL、Redis、MinIO 和可观测组件如何独立部署、健康检查和扩缩容。</p>
+<h3>2.3 多租户边界</h3><p>从 JWT 组织上下文到 repository tenant_id，再到跨组织 404、审计和下载鉴权。</p>
+<h3>2.4 Hermes 外层框架</h3><p>先讲 Hermes 如何包在 React 根组件、工作区 Shell、分析会话和 Agent 控制台外层，再讲它如何聚合运行信号、候选改进、评测门禁和人工审批。</p>
+<h3>2.5 Agent 主流程</h3><p>按问题、路由、计划、工具、校验、事件和报告顺序讲解一次分析请求。</p>
+<h3>2.6 Router 与 Subagents</h3><p>解释 data、knowledge、hybrid、unsupported 四种分支，以及并行子图如何合并证据。</p>
+<h3>2.7 SQL Guard</h3><p>依次说明 SELECT/WITH、表白名单、危险函数、超时、行数限制和审计。</p>
+<h3>2.8 Advanced RAG</h3><p>从文档版本、父子分块、Dense/BM25、RRF、重排到来源定位，说明每一步解决的问题。</p>
+<h3>2.9 MCP 工具审批</h3><p>展示工具注册、RBAC、主机白名单、审批、执行和审计的治理链路。</p>
+<h3>2.10 记忆体系</h3><p>对比 Checkpoint 与长期记忆，说明恢复、用户控制、过期和组织隔离。</p>
+<h3>2.11 AI 安全自进化</h3><p>展示运行信号如何产生 prompt、retrieval、tool、policy、memory 候选改进，以及这些候选为什么必须通过离线评测和人工采纳。</p>
+<h3>2.12 SSE 流式任务</h3><p>说明事件持久化、Redis 发布、Last-Event-ID 恢复、幂等和取消。</p>
+<h3>2.13 报告交付</h3><p>说明 Markdown、异步 PDF、MinIO/S3、不可变产物和授权下载。</p>
+<h3>2.14 可观测链路</h3><p>从 X-Trace-ID 贯穿 API、Agent、MCP、数据库、Worker、OTLP、Prometheus 和 Grafana，并说明 Hermes runtime 如何把这些信号汇总为演化状态。</p>
+<h2>3. 讲图的统一话术</h2>
+<p>每张图用“入口、边界、核心动作、失败路径、证据落点”五句话讲完。先讲业务问题，再讲技术节点；先讲数据如何流动，再讲为什么这样拆分；最后用测试、审计或 Trace 证明设计不是停留在概念层。</p>

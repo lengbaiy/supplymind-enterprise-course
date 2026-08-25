@@ -1,0 +1,23 @@
+<h1>SupplyMind 项目简历模板</h1>
+<blockquote><p>所有表述只使用仓库中能证明的能力，不编写无法验证的性能数字、客户数量或收益指标。</p></blockquote>
+<h2>1. 一句话项目描述</h2><p>SupplyMind 是面向制造业供应链组织的多租户只读 AI 数据分析平台，融合 Hermes 外层编排框架、LangGraph Agent、Advanced RAG、MCP 工具治理、PostgreSQL/pgvector、SSE 和可观测链路，实现从自然语言问题到可审计报告，再到安全自进化候选改进的完整闭环。</p>
+<h2>2. 后端/平台岗位版本</h2>
+<h3>2.1 项目职责</h3><ul><li>设计 FastAPI + PostgreSQL 的多租户 API 与领域模块。</li><li>实现 LangGraph Router、Handoff、Subagent 和可恢复任务。</li><li>通过 SQL Guard、表白名单和只读连接控制 AI 数据访问。</li><li>建设 Redis/Celery、MinIO/S3、OTLP 和 Prometheus 交付链路。</li></ul>
+<h3>2.2 简历 bullets</h3><ul><li>构建供应链自然语言分析闭环，将数据源、知识库、受控 SQL、引用和报告交付统一到 Agent runtime。</li><li>实现组织隔离、JWT 上下文、资源 404 策略、只读 SQL Guard、MCP 白名单和审计事件。</li><li>通过 PostgreSQL 事件持久化、Redis 发布和 SSE Last-Event-ID 实现长任务流式恢复。</li><li>加入 Hermes 外层框架与安全自进化控制台，聚合失败率、长期记忆、评测门禁和审批队列，生成 prompt、retrieval、memory 等候选改进。</li></ul>
+<h2>3. AI Agent 岗位版本</h2>
+<h3>3.1 重点强调</h3><p>重点讲状态图、Router 分类、Handoff 控制权转移、Subagent 并行、工具审批、RAG 证据和验证节点，不要只罗列 LangChain/LangGraph 名称。</p>
+<h3>3.2 面试话术</h3><p>“我把分析任务拆成数据、知识和混合三类路径。数据路径必须经过 SQL Guard，知识路径必须返回版本化引用，混合路径并行执行，最后由验证节点合并并生成报告。”</p>
+<h3>3.3 Hermes 与自进化话术</h3><p>“我没有让 AI 直接改生产系统，而是在 Hermes 外层框架里把历史失败、记忆信号、评测结果和审批状态汇总成候选改进。候选必须通过离线评测和人工采纳，才能影响提示词、检索策略或记忆配置。”</p>
+<h2>4. 全栈岗位版本</h2>
+<h3>4.1 前端职责</h3><p>React、TypeScript、Vite、领域路由、API client、SSE 事件、ECharts 仪表盘、报告和系统状态页面。</p>
+<h3>4.2 全链路表述</h3><p>从页面提交问题开始，说明 API 建立租户上下文，Agent 产生事件，前端按事件更新状态，最终展示来源、Trace、报告和错误恢复。</p>
+<h2>5. STAR 故事模板</h2>
+<h3>5.1 Situation</h3><p>制造供应链数据分散在数据库和制度文档中，直接让模型生成结论会有越权、不可追溯和无法恢复的问题。</p>
+<h3>5.2 Task</h3><p>需要设计一套真实数据可控、知识可引用、任务可恢复的分析平台。</p>
+<h3>5.3 Action</h3><p>采用租户上下文、只读数据源、SQL Guard、LangGraph、Advanced RAG、MCP 审批、事件持久化、Hermes 自进化门禁和 Trace 链路。</p>
+<h3>5.4 Result</h3><p>形成从问题、检索、SQL、验证到报告的可审计流程，并能通过测试和部署脚本验证关键边界。</p>
+<h2>6. 30 秒、1 分钟、3 分钟介绍</h2>
+<h3>6.1 30 秒</h3><p>我做的是 SupplyMind，一个面向制造业供应链的多租户只读 AI 分析平台，核心是让 Agent 能安全调用真实数据并返回带来源、Trace 和报告的结果；新版本加入 Hermes 外层框架，把运行信号转成可评测、可审批的自进化候选。</p>
+<h3>6.2 1 分钟</h3><p>补充 Router、RAG、MCP、SQL Guard、SSE 和异步报告链路。</p>
+<h3>6.3 3 分钟</h3><p>按请求链路、租户边界、故障恢复、部署和验收顺序完整展开。</p>
+<h2>7. 简历真实性检查</h2><ul><li>每个亮点都能指向代码、测试或部署文件。</li><li>Hermes 能指向 <code>frontend/src/app/hermes.tsx</code>、<code>/api/v1/hermes/runtime</code>、Agent 平台自进化 Tab 和 E2E 测试。</li><li>不写未测量的“提升百分比”和“毫秒级延迟”。</li></ul>

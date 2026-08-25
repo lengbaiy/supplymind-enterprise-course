@@ -1,0 +1,37 @@
+<h1>SupplyMind 项目八股与面试题</h1>
+<blockquote><p>答题顺序统一为：概念 → 项目落点 → 关键取舍 → 故障与验证。不要把框架名当成答案。</p></blockquote>
+<h2>1. FastAPI、ASGI 与 SSE</h2>
+<h3>1.1 问：为什么使用 FastAPI？</h3><p>答：类型注解、Pydantic 校验、OpenAPI 和 ASGI 异步模型适合 API、SSE 和健康检查。项目落点是 main、api、dependencies 和领域 routers。</p>
+<h3>1.2 问：SSE 与 WebSocket 如何选择？</h3><p>SSE 适合服务端单向推送分析事件，浏览器原生支持自动重连；双向实时协作才优先考虑 WebSocket。SupplyMind 通过 Last-Event-ID 恢复事件。</p>
+<h2>2. PostgreSQL、pgvector 与 Alembic</h2>
+<h3>2.1 问：为什么 PostgreSQL 同时保存业务和 Agent 状态？</h3><p>统一事务、审计、Checkpoint、知识版本和业务资源，便于按租户查询和恢复；向量检索通过 pgvector 集成，减少额外基础设施。</p>
+<h3>2.2 问：如何避免跨租户数据泄露？</h3><p>JWT 组织上下文、服务层 tenant_id、资源归属校验和统一 404 四层控制，测试覆盖 organization、datasource、knowledge 和 report。</p>
+<h2>3. Redis、Celery、幂等与死信</h2>
+<h3>3.1 问：Redis 是事实数据库吗？</h3><p>不是。任务和事件先落 PostgreSQL，Redis 用于发布、队列协作和短期缓存；Redis 丢失后可以从持久化事件恢复。</p>
+<h3>3.2 问：如何保证任务幂等？</h3><p>使用 analysis/report/export 的幂等键、状态机和唯一约束，重试前检查已有成功结果，避免重复导出或重复写入。</p>
+<h2>4. LangGraph、Router、Handoff、Subagent</h2>
+<h3>4.1 问：为什么需要显式 State？</h3><p>多节点、多工具、暂停恢复和并行合并都需要结构化状态；SupplyMind 在 state.py 中保存问题、租户、证据、SQL、事件和交付状态。</p>
+<h3>4.2 问：Router 与 Handoff 的区别？</h3><p>Router 负责分类和选择路径，Handoff 负责把控制权转移给下一个专业节点；hybrid 场景可通过 Send 并行执行多个 Subagent。</p>
+<h2>4A. Hermes 与 AI 自进化</h2>
+<h3>4A.1 问：Hermes 在项目里解决什么问题？</h3><p>Hermes 是外层编排框架，负责把分析会话、Agent 控制台、运行信号、长期记忆、评测门禁和人工审批放进一个统一治理边界。代码落点包括 <code>frontend/src/app/hermes.tsx</code>、分析页外层框架、Agent 平台自进化 Tab 和 <code>/api/v1/hermes/runtime</code>。</p>
+<h3>4A.2 问：AI 自进化会不会带来失控风险？</h3><p>不会让模型直接修改生产配置。SupplyMind 的做法是安全自进化闭环：历史失败、记忆和评测结果只生成候选改进；候选必须经过脱敏、离线评测、回归测试、人工审批和审计，失败时保持当前生产配置。</p>
+<h3>4A.3 问：自进化可以优化哪些对象？</h3><p>当前候选对象包括 prompt、retrieval、tool、policy 和 memory。例如 SQL Guard 失败率升高时生成提示词修复候选；引用完整性不足时生成检索阈值候选；用户经常关注某类 KPI 时生成可撤销的长期记忆。</p>
+<h2>5. RAG、Embedding、BM25、RRF、Rerank</h2>
+<h3>5.1 问：为什么需要混合检索？</h3><p>Dense 负责语义相似，BM25 负责 SKU、批次号和制度条款等精确关键词；RRF 按名次融合，Rerank 再进行精排。</p>
+<h3>5.2 问：Embedding 失败怎么处理？</h3><p>知识版本进入失败状态并返回原因，不能写假向量，也不能用静态内容冒充检索结果。</p>
+<h2>6. MCP、A2A 与工具安全</h2>
+<h3>6.1 问：MCP 解决什么问题？</h3><p>把 Schema、只读 SQL、检索和报告等能力标准化为工具协议，让 Agent 不直接耦合具体服务实现。</p>
+<h3>6.2 问：如何防止工具越权？</h3><p>工具注册、租户 token、RBAC、主机白名单、SQL Guard、审批和审计共同组成边界。</p>
+<h2>7. JWT、RBAC、审计与数据安全</h2>
+<h3>7.1 问：为什么跨组织返回 404？</h3><p>避免通过 403 或资源差异暴露其他组织是否存在某个数据源、报告或任务。</p>
+<h3>7.2 问：密钥应该放哪里？</h3><p>只在后端环境变量、Secret 或外部密钥系统中使用；API Key 不进入前端、不进入日志、不进入仓库。</p>
+<h2>8. MinIO/S3、PDF 与授权下载</h2>
+<h3>8.1 问：为什么不用本地文件系统？</h3><p>对象存储适合多副本、异步 Worker、不可变产物和预签名下载；授权仍由 API 在生成下载链接前校验。</p>
+<h2>9. Docker、Helm、Kubernetes</h2>
+<h3>9.1 问：Compose 与 Helm 如何对应？</h3><p>Compose 用于本地多服务闭环，Helm 将 API、Worker、前端、Ingress、HPA 和 ConfigMap 参数化，生产可独立扩缩容。</p>
+<h3>9.2 问：如何回滚？</h3><p>先停止新字段写入，确认备份与兼容性，再回滚镜像和配置；禁止删除数据卷代替回滚。</p>
+<h2>10. 可观测与测试</h2>
+<h3>10.1 问：如何定位一次失败分析？</h3><p>用 X-Trace-ID 串起 API、Agent、MCP、SQL、Worker、审计和报告，再结合 Prometheus 指标判断是依赖失败、业务拒绝还是超时。</p>
+<h3>10.2 问：上线前跑什么？</h3><p>后端 pytest、前端 build/test/e2e、Compose config、Alembic upgrade、Helm lint/template 和关键 SSE/RAG/MCP 测试。</p>
+<h2>11. 追问清单</h2>
+<ol><li>如果模型输出错误 SQL，你的最后一道防线在哪里？</li><li>如果 Redis 丢失，任务和 SSE 能否恢复？</li><li>如果 RAG 召回为空，系统如何区分无知识和服务故障？</li><li>如果 Worker 扩容，如何避免重复 Beat 调度？</li><li>如果用户切换组织，前端缓存和下载链接如何失效？</li></ol>
